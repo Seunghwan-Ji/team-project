@@ -1,11 +1,12 @@
-import pygame
-pygame.init()
+import pygame as pg
+import numpy as np
+pg.init()
 
 WINDOW_WIDTH, WINDOW_HEIGHT = 800, 600
-WINDOW = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-pygame.display.set_caption("Platformer Game")
+WINDOW = pg.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+pg.display.set_caption("Platformer Game")
 
-FPS = pygame.time.Clock()
+FPS = pg.time.Clock()
 MOVE_LEFT = False # 오른쪽 이동키 눌림 여부
 MOVE_RIGHT = False # 왼쪽 이동키 눌림 여부
 PLAYER_FLIP = False # 플레이어 이미지 반전(플레이어가 보고있는 방향)
@@ -20,18 +21,18 @@ RUN = True
 
 # 전달 받은 이미지의 사이즈 조절
 def change_image_size(img, size):
-    return pygame.transform.scale(img, (img.get_width() * size, img.get_height() * size))
+    return pg.transform.scale(img, (img.get_width() * size, img.get_height() * size))
 
 # 배경 타일 이미지
-BG_TILE = pygame.image.load("img/bg.png")
+BG_TILE = pg.image.load("img/bg.png")
 BG_TILE = change_image_size(BG_TILE, 2)
 
 # 발판 타일 이미지
-FOOTHOLD_TILE = pygame.image.load("img/floor.png")
+FOOTHOLD_TILE = pg.image.load("img/floor.png")
 FOOTHOLD_TILE = change_image_size(FOOTHOLD_TILE, 2)
 
 # 플레이어 이미지
-PLAYER_IMG = pygame.image.load("img/player.png")
+PLAYER_IMG = pg.image.load("img/player.png")
 PLAYER_IMG = change_image_size(PLAYER_IMG, 2)
 
 # 플레이어 초기 위치 설정
@@ -41,26 +42,26 @@ PLAYER_X, PLAYER_Y = 0, 0
 PULL_X, PULL_Y = 0, 0
 
 # 맵 형태
-MAP_DATA = [
-    "...........................##",
-    ".................#...#..#....",
-    ".......##..#.#...............",
-    ".............................",
-    ".....##......................",
-    "........#..#.#...............",
-    "...............#..#..##..#...",
-    "...........................##",
-    ".........................#...",
-    "...............#..#..##......",
-    "...........#.#...............",
-    ".......##....................",
-    ".....##......................",
-    "#############################"
-]
+MAP_DATA = np.array(
+    [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
+     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0],
+     [0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+     [0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+     [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0],
+     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
+     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0],
+     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+     [0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+     [0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
+    )
 
 # 전달받은 이미지의 충돌 영역 정의(히트박스)
 def collision_rect(img, x, y):
-    return pygame.Rect(x, y, img.get_width(), img.get_height())
+    return pg.Rect(x, y, img.get_width(), img.get_height())
 
 # 전달받은 두 이미지의 충돌 감지 여부
 def detect_collision(rect1, rect2):
@@ -68,23 +69,16 @@ def detect_collision(rect1, rect2):
 
 # 플레이어가 발판 위에 닿았는지 여부를 검사
 def check_on_foothold(player_rect):
-    res = False
-    for row_num, row in enumerate(MAP_DATA): # 맵의 행 조회
-        for col_num, var in enumerate(row): # 맵의 열 조회
-            if var == "#":
-                x = col_num * FOOTHOLD_TILE.get_width() # 열 번호 * 발판 이미지의 가로 길이
-                y = row_num * FOOTHOLD_TILE.get_height() # 행 번호 * 발판 이미지의 세로 길이
-
-                object_rect = collision_rect(FOOTHOLD_TILE, x, y) # 발판 이미지의 충돌 영역 정의
-                if player_rect.colliderect(object_rect): # 발판 이미지와 충돌시
-                    # 플레이어의 충돌 영역의 아랫부분과 발판의 충돌 영역의 윗부분이 접하는지 확인
-                    if object_rect.top - 50 <= player_rect.bottom <= object_rect.top + 50: # 오차 범위 적용
-                        res = True
-                        break
-        if res:
-            break
-    
-    return res # 충돌 여부 반환
+    foothold_indices = np.argwhere(MAP_DATA == 1) # 발판이 있는 모든 위치의 행, 열 인덱스가 저장된 배열
+    # 발판 위치를 실제 좌표로 변환(행 번호 * 발판 높이, 열 번호 * 발판 너비)
+    foothold_positions = foothold_indices * (FOOTHOLD_TILE.get_height(), FOOTHOLD_TILE.get_width())
+    # 모든 발판의 충돌 영역 리스트 생성
+    foothold_rects = [collision_rect(FOOTHOLD_TILE, pos[1], pos[0]) for pos in foothold_positions]
+    for foothold_rect in foothold_rects:
+        if player_rect.colliderect(foothold_rect): # 플레이어가 발판과 충돌했는지 확인
+            # 충돌 부분이 플레이어의 아랫부분과 발판의 윗부분인지 확인
+            if foothold_rect.top - 50 <= player_rect.bottom <= foothold_rect.top + 50: # 오차 범위 적용
+                return True
 
 while RUN:
     FPS.tick(60) # 초당 화면에 그려낼 프레임 수(출력 횟수)
@@ -102,22 +96,22 @@ while RUN:
     
     # <이벤트 처리 로직>
 
-    for event in pygame.event.get(): # 파이게임의 이벤트들 참조
-        if event.type == pygame.QUIT: # 닫기 버튼을 눌러 창을 닫았을 때
+    for event in pg.event.get(): # 파이게임의 이벤트들 참조
+        if event.type == pg.QUIT: # 닫기 버튼을 눌러 창을 닫았을 때
             RUN = False # 루프 탈출
-        elif event.type == pygame.KEYDOWN: # 키보드 키가 눌린 상태일 때
-            if event.key == pygame.K_LEFT: # 왼쪽 방향키인 경우
+        elif event.type == pg.KEYDOWN: # 키보드 키가 눌린 상태일 때
+            if event.key == pg.K_LEFT: # 왼쪽 방향키인 경우
                 MOVE_LEFT = True # 왼쪽 이동 기능 활성화
-            elif event.key == pygame.K_RIGHT: # 오른쪽 방향키인 경우
+            elif event.key == pg.K_RIGHT: # 오른쪽 방향키인 경우
                 MOVE_RIGHT = True # 오른쪽 이동 기능 활성화
-        elif event.type == pygame.KEYUP: # 키보드 키를 뗀 상태일 때
-            if event.key == pygame.K_LEFT: # 왼쪽 방향키인 경우
+        elif event.type == pg.KEYUP: # 키보드 키를 뗀 상태일 때
+            if event.key == pg.K_LEFT: # 왼쪽 방향키인 경우
                 MOVE_LEFT = False # 왼쪽 이동 기능 비활성화
-            elif event.key == pygame.K_RIGHT: # 오른쪽 방향키인 경우
+            elif event.key == pg.K_RIGHT: # 오른쪽 방향키인 경우
                 MOVE_RIGHT = False # 오른쪽 이동 기능 비활성화
 
-    keys = pygame.key.get_pressed() # 키보드에서 눌린 키들
-    if keys[pygame.K_LALT] and not JUMPING and ON_FOOTHOLD: # 왼쪽 ALT키가 눌려있고, 플레이어가 점프중이 아니고, 발판 위에 있으면
+    keys = pg.key.get_pressed() # 키보드에서 눌린 키들
+    if keys[pg.K_LALT] and not JUMPING and ON_FOOTHOLD: # 왼쪽 ALT키가 눌려있고, 플레이어가 점프중이 아니고, 발판 위에 있으면
         JUMPING = True # 점프 기능 활성화
 
     # <플레이어 이동 로직>
@@ -126,12 +120,12 @@ while RUN:
     if MOVE_LEFT and PLAYER_X > 0: # 왼쪽 이동 기능이 활성화 되어있고, 플레이어가 맵 좌측 끝부분 보다 멀리 있으면
         PLAYER_X -= MOVE_SPEED # 이동속도 수치만큼 왼쪽으로 이동
         if not PLAYER_FLIP: # 플레이어 이미지가 반전되지 않은 상태이면
-            PLAYER_IMG = pygame.transform.flip(PLAYER_IMG, True, False) # 플레이어 이미지 반전
+            PLAYER_IMG = pg.transform.flip(PLAYER_IMG, True, False) # 플레이어 이미지 반전
             PLAYER_FLIP = True # 반전 상태로 변경
     elif MOVE_RIGHT and PLAYER_X < (len(MAP_DATA[0]) * FOOTHOLD_TILE.get_width() - PLAYER_IMG.get_width()): # 플레이어가 맵 우측 끝부분 보다 안쪽에 있으면
         PLAYER_X += MOVE_SPEED # 이동속도 수치만큼 오른쪽으로 이동
         if PLAYER_FLIP: # 이미지 반전 상태이면
-            PLAYER_IMG = pygame.transform.flip(PLAYER_IMG, True, False) # 이미지 재반전
+            PLAYER_IMG = pg.transform.flip(PLAYER_IMG, True, False) # 이미지 재반전
             PLAYER_FLIP = False # 반전 상태 초기화
 
     # 점프 기능
@@ -149,9 +143,11 @@ while RUN:
     # <출력 로직>
     
     # 먼저 출력 화면에 배경 타일 이미지를 채워서 그리기
-    for x in range(0, WINDOW_WIDTH, BG_TILE.get_width()):
-        for y in range(0, WINDOW_HEIGHT, BG_TILE.get_height()):
-            WINDOW.blit(BG_TILE, (x, y))
+    arrX = np.arange(0, WINDOW_WIDTH, BG_TILE.get_width())
+    arrY = np.arange(0, WINDOW_HEIGHT, BG_TILE.get_height())
+    grid_arrX, grid_arrY = np.meshgrid(arrX, arrY, indexing='xy') # indexing='xy': 행렬을 좌표 형식으로 바꿔줌 (y, x) -> (x, y)
+    for x, y in zip(grid_arrX.ravel(), grid_arrY.ravel()): # ravel(): 다차원 배열을 1차원 배열로 평탄화
+        WINDOW.blit(BG_TILE, (x, y))
 
     # 맵을 x축, y축으로 당길 수치(평행이동할 수치)
     # (0, 0) 위치로부터 x축 방향으로는 화면 가로 중간 너비만큼 떨어진 곳에 가상의 '깃발'이 있고,
@@ -170,17 +166,16 @@ while RUN:
 
     # **플레이어를 포함한 맵에 존재하는 모든 오브젝트는 좌표를 항상 (PULL_X, PULL_Y)만큼 평행이동 시킨 후 그린다.**
     # 맵을 출력 화면쪽으로 당겨서 그리기(평행이동)
-    for row_num, row in enumerate(MAP_DATA): # 맵의 행 조회
-        for col_num, var in enumerate(row): # 맵의 열 조회
-            if var == "#":
-                x = col_num * FOOTHOLD_TILE.get_width() # 열 번호 * 발판 이미지의 가로 길이
-                y = row_num * FOOTHOLD_TILE.get_height() # 행 번호 * 발판 이미지의 세로 길이
-                # 발판의 실제 위치를 (PULL_X, PULL_Y)만큼 평행이동 시키고 발판 이미지 그리기
-                WINDOW.blit(FOOTHOLD_TILE, (x - PULL_X, y - PULL_Y))
+    foothold_indices = np.argwhere(MAP_DATA == 1)
+    foothold_positions = foothold_indices * (FOOTHOLD_TILE.get_height(), FOOTHOLD_TILE.get_width())
+    for pos in foothold_positions:
+        x, y = pos[1], pos[0]
+        # 발판의 실제 위치를 (PULL_X, PULL_Y)만큼 평행이동 시키고 발판 이미지 그리기
+        WINDOW.blit(FOOTHOLD_TILE, (x - PULL_X, y - PULL_Y))
     
     # 플레이어의 실제 위치를 (PULL_X, PULL_Y)만큼 평행이동 시키고 플레이어 이미지 그리기
     WINDOW.blit(PLAYER_IMG, (PLAYER_X - PULL_X, PLAYER_Y - PULL_Y))
     
-    pygame.display.update() # 화면 상태 업데이트
+    pg.display.update() # 화면 상태 업데이트
 
-pygame.quit()
+pg.quit()
