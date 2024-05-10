@@ -2,7 +2,7 @@ import pygame as pg
 import numpy as np
 pg.init()
 
-WINDOW_WIDTH, WINDOW_HEIGHT = 800, 600
+WINDOW_WIDTH, WINDOW_HEIGHT = 1200, 800
 WINDOW = pg.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 pg.display.set_caption("Platformer Game")
 
@@ -17,6 +17,9 @@ INIT_JUMP_POWER = 15 # 점프력(초기값)
 JUMP_POWER = INIT_JUMP_POWER # 현재 점프력
 JUMPING = False # 점프중인 상태
 ON_FOOTHOLD = False # 플레이어가 발판 위에 닿았는지 여부
+COLLISION_TOP = False # 플레이어 머리 부분이 충돌했는지 여부
+COLLISION_LEFT = False # 플레이어 왼쪽 부분이 충돌했는지 여부
+COLLISION_RIGHT = False # 플레이어 오른쪽 부분이 충돌했는지 여부
 RUN = True
 
 # 전달 받은 이미지의 사이즈 조절
@@ -41,23 +44,12 @@ PLAYER_X, PLAYER_Y = 0, 0
 # 초기 평행이동 수치 설정(맵의 x, y축을 출력 화면쪽으로 당길 수치)
 PULL_X, PULL_Y = 0, 0
 
-# 맵 형태
-MAP_DATA = np.array(
-    [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
-     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0],
-     [0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-     [0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-     [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0],
-     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],
-     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0],
-     [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-     [0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-     [0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-     [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
-    )
+# 텍스트 맵 파일을 읽어와서 데이터를 리스트로 저장
+with open('map_data_1.txt', 'r') as file:
+    data = [list(map(int, line.split())) for line in file]
+
+# 데이터 리스트를 넘파이 2차원 배열로 변환
+MAP_DATA = np.array(data)
 
 # 전달받은 이미지의 충돌 영역 정의(히트박스)
 def collision_rect(img, x, y):
@@ -67,8 +59,10 @@ def collision_rect(img, x, y):
 def detect_collision(rect1, rect2):
     return rect1.colliderect(rect2)
 
-# 플레이어가 발판 위에 닿았는지 여부를 검사
-def check_on_foothold(player_rect):
+# 충돌부위 검사
+def check_collision_part(player_rect):
+    collision_part = "" # 충돌부위
+    contact_pos = () # 접점
     foothold_indices = np.argwhere(MAP_DATA == 1) # 발판이 있는 모든 위치의 행, 열 인덱스가 저장된 배열
     # 발판 위치를 실제 좌표로 변환(행 번호 * 발판 높이, 열 번호 * 발판 너비)
     foothold_positions = foothold_indices * (FOOTHOLD_TILE.get_height(), FOOTHOLD_TILE.get_width())
@@ -76,23 +70,71 @@ def check_on_foothold(player_rect):
     foothold_rects = [collision_rect(FOOTHOLD_TILE, pos[1], pos[0]) for pos in foothold_positions]
     for foothold_rect in foothold_rects:
         if player_rect.colliderect(foothold_rect): # 플레이어가 발판과 충돌했는지 확인
-            # 충돌 부분이 플레이어의 아랫부분과 발판의 윗부분인지 확인
-            if foothold_rect.top - 50 <= player_rect.bottom <= foothold_rect.top + 50: # 오차 범위 적용
-                return True
+            distance_x = player_rect.centerx - foothold_rect.centerx # x좌표 차이
+            distance_y = player_rect.centery - foothold_rect.centery # y좌표 차이
+            if abs(distance_x) > abs(distance_y): # x좌표 차이가 y좌표 차이보다 클 경우
+                if distance_x > 0: # x좌표 차이가 양수이면
+                    tangent = foothold_rect.right # 접선
+                    contact_pos = (tangent, PLAYER_Y) # 접점
+                    collision_part = "left"
+                else:
+                    tangent = foothold_rect.left - PLAYER_IMG.get_width()
+                    contact_pos = (tangent, PLAYER_Y)
+                    collision_part = "right"
+            else:
+                if distance_y > 0: # y좌표 차이가 양수이면
+                    tangent = foothold_rect.bottom
+                    contact_pos = (PLAYER_X, tangent)
+                    collision_part = "top"
+                else:
+                    tangent = foothold_rect.top - PLAYER_IMG.get_height()
+                    contact_pos = (PLAYER_X, tangent + 1.5)
+                    collision_part = "bottom"
+            break
+    
+    return collision_part, contact_pos
 
 while RUN:
     FPS.tick(60) # 초당 화면에 그려낼 프레임 수(출력 횟수)
 
     # <충돌 처리 로직>
-    
-    player_rect = collision_rect(PLAYER_IMG, PLAYER_X, PLAYER_Y) # 플레이어 이미지의 충돌 영역 정의
-    is_on_foothold = check_on_foothold(player_rect) # 플레이어가 발판 위에 닿았는지 여부
 
-    if is_on_foothold: # 반환값이 True이면
-        ON_FOOTHOLD = True # 발판에 닿은 상태로 변경
-        GRAVITY_ACC = 0 # 중력 가속도 초기화
+    player_rect = collision_rect(PLAYER_IMG, PLAYER_X, PLAYER_Y) # 플레이어 이미지의 충돌 영역 정의
+    collision_part, contact_pos = check_collision_part(player_rect)
+    
+    if collision_part == "left":
+        COLLISION_LEFT = True
+        if (PLAYER_X, PLAYER_Y) != contact_pos:
+            print("left")
+            PLAYER_X, PLAYER_Y = contact_pos[0], contact_pos[1]
     else:
-        ON_FOOTHOLD = False # 발판에 닿지 않은 상태로 변경
+        COLLISION_LEFT = False
+    
+    if collision_part == "right":
+        COLLISION_RIGHT = True
+        if (PLAYER_X, PLAYER_Y) != contact_pos:
+            print("right")
+            PLAYER_X, PLAYER_Y = contact_pos[0], contact_pos[1]
+    else:
+        COLLISION_RIGHT = False
+    
+    if collision_part == "top":
+        COLLISION_TOP = True
+        JUMP_POWER = 0 # 점프력을 0으로 변경하고 점프 기능에서 더이상 뛰어오르지 못하게 한다.
+        if (PLAYER_X, PLAYER_Y) != contact_pos:
+            print("top")
+            PLAYER_X, PLAYER_Y = contact_pos[0], contact_pos[1]
+    else:
+        COLLISION_TOP = False
+    
+    if collision_part == "bottom":
+        ON_FOOTHOLD = True
+        GRAVITY_ACC = 0 # 중력 가속도 초기화
+        if (PLAYER_X, PLAYER_Y) != contact_pos:
+            print("bottom")
+            PLAYER_X, PLAYER_Y = contact_pos[0], contact_pos[1]
+    else:
+        ON_FOOTHOLD = False
     
     # <이벤트 처리 로직>
 
@@ -117,22 +159,29 @@ while RUN:
     # <플레이어 이동 로직>
     
     # 좌우 이동 기능
-    if MOVE_LEFT and PLAYER_X > 0: # 왼쪽 이동 기능이 활성화 되어있고, 플레이어가 맵 좌측 끝부분 보다 멀리 있으면
-        PLAYER_X -= MOVE_SPEED # 이동속도 수치만큼 왼쪽으로 이동
+    if MOVE_LEFT:
+        # 플레이어가 좌측으로 충돌중이 아니고, 맵 좌측 끝부분 보다 멀리 있으면
+        if not COLLISION_LEFT and PLAYER_X > 0:
+            PLAYER_X -= MOVE_SPEED # 이동속도 수치만큼 왼쪽으로 이동
         if not PLAYER_FLIP: # 플레이어 이미지가 반전되지 않은 상태이면
             PLAYER_IMG = pg.transform.flip(PLAYER_IMG, True, False) # 플레이어 이미지 반전
             PLAYER_FLIP = True # 반전 상태로 변경
-    elif MOVE_RIGHT and PLAYER_X < (len(MAP_DATA[0]) * FOOTHOLD_TILE.get_width() - PLAYER_IMG.get_width()): # 플레이어가 맵 우측 끝부분 보다 안쪽에 있으면
-        PLAYER_X += MOVE_SPEED # 이동속도 수치만큼 오른쪽으로 이동
+    elif MOVE_RIGHT:
+        # 플레이어가 우측으로 충돌중이 아니고, 맵 우측 끝부분 보다 안쪽에 있으면
+        if not COLLISION_RIGHT and PLAYER_X < (
+            len(MAP_DATA[0]) * FOOTHOLD_TILE.get_width() - PLAYER_IMG.get_width()):
+            PLAYER_X += MOVE_SPEED # 이동속도 수치만큼 오른쪽으로 이동
         if PLAYER_FLIP: # 이미지 반전 상태이면
             PLAYER_IMG = pg.transform.flip(PLAYER_IMG, True, False) # 이미지 재반전
             PLAYER_FLIP = False # 반전 상태 초기화
 
     # 점프 기능
     if JUMPING: # 점프 기능이 활성화 되어있으면
-        PLAYER_Y -= JUMP_POWER # 현재 점프력 수치만큼 플레이어를 위로 이동
-        JUMP_POWER -= GRAVITY # 점프력 수치를 중력만큼 감소(매 루프마다 뛰어오르는 속도가 서서히 감소)
-        if JUMP_POWER == 0: # 현재 점프력 수치가 0이 되었으면
+        if not COLLISION_TOP:
+            # print(JUMP_POWER)
+            PLAYER_Y -= JUMP_POWER # 현재 점프력 수치만큼 플레이어를 위로 이동
+            JUMP_POWER -= GRAVITY # 점프력 수치를 중력만큼 감소(매 루프마다 뛰어오르는 속도가 서서히 감소)
+        if JUMP_POWER <= 0: # 현재 점프력 수치가 0이하면
             JUMPING = False # 점프 기능 비활성화
             JUMP_POWER = INIT_JUMP_POWER # 점프력 수치 초기화
     else:
