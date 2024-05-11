@@ -2,54 +2,54 @@ import pygame as pg
 import numpy as np
 pg.init()
 
-WINDOW_WIDTH, WINDOW_HEIGHT = 1200, 800
-WINDOW = pg.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-pg.display.set_caption("Platformer Game")
+WINDOW_WIDTH, WINDOW_HEIGHT = 1200, 800 # 출력화면 창의 너비, 높이
+WINDOW = pg.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT)) # 출력화면 창 정의
+pg.display.set_caption("Platformer Game") # 창 상단바 제목
 
-FPS = pg.time.Clock()
-MOVE_LEFT = False # 오른쪽 이동키 눌림 여부
-MOVE_RIGHT = False # 왼쪽 이동키 눌림 여부
-PLAYER_FLIP = False # 플레이어 이미지 반전(플레이어가 보고있는 방향)
-GRAVITY = 0.5 # 중력
-GRAVITY_ACC = 0 # 축적된 중력의 총 크기(중력 가속도)
-MOVE_SPEED = 5 # 이동속도
-INIT_JUMP_POWER = 15 # 점프력(초기값)
-JUMP_POWER = INIT_JUMP_POWER # 현재 점프력
-JUMPING = False # 점프중인 상태
-ON_FOOTHOLD = False # 플레이어가 발판 위에 닿았는지 여부
-COLLISION_TOP = False # 플레이어 머리 부분이 충돌했는지 여부
-COLLISION_LEFT = False # 플레이어 왼쪽 부분이 충돌했는지 여부
-COLLISION_RIGHT = False # 플레이어 오른쪽 부분이 충돌했는지 여부
-RUN = True
+# 텍스트 맵 파일을 읽어와서 리스트로 저장
+with open('map_data_1.txt', 'r') as file:
+    data = [list(map(int, list(line.strip()))) for line in file]
+
+# 데이터 리스트를 넘파이 2차원 배열로 변환
+MAP_DATA = np.array(data)
 
 # 전달 받은 이미지의 사이즈 조절
 def change_image_size(img, size):
     return pg.transform.scale(img, (img.get_width() * size, img.get_height() * size))
 
 # 배경 타일 이미지
-BG_TILE = pg.image.load("img/bg.png")
+BG_TILE = pg.image.load("img/Brown.png")
 BG_TILE = change_image_size(BG_TILE, 2)
 
 # 발판 타일 이미지
-FOOTHOLD_TILE = pg.image.load("img/floor.png")
+FOOTHOLD_TILE = pg.image.load("img/foothold_2.png")
 FOOTHOLD_TILE = change_image_size(FOOTHOLD_TILE, 2)
 
 # 플레이어 이미지
-PLAYER_IMG = pg.image.load("img/player.png")
+PLAYER_IMG = pg.image.load("img/player_2.png")
 PLAYER_IMG = change_image_size(PLAYER_IMG, 2)
 
-# 플레이어 초기 위치 설정
-PLAYER_X, PLAYER_Y = 0, 0
+# 배열에서 값이 9인 요소의 행, 열 인덱스 찾기, [0]은 값이 여러개일 경우 하나만 선택한다는 의미
+PLAYER_INDEX = np.argwhere(MAP_DATA == 9)[0]
+
+# 플레이어 초기 위치를 행, 열 인덱스에 각각 너비와 높이를 곱해서 좌표로 지정(스폰 좌표)
+PLAYER_X, PLAYER_Y = PLAYER_INDEX[1] * PLAYER_IMG.get_width(), PLAYER_INDEX[0] * PLAYER_IMG.get_height()
 
 # 초기 평행이동 수치 설정(맵의 x, y축을 출력 화면쪽으로 당길 수치)
 PULL_X, PULL_Y = 0, 0
 
-# 텍스트 맵 파일을 읽어와서 데이터를 리스트로 저장
-with open('map_data_1.txt', 'r') as file:
-    data = [list(map(int, line.split())) for line in file]
-
-# 데이터 리스트를 넘파이 2차원 배열로 변환
-MAP_DATA = np.array(data)
+FPS = pg.time.Clock() # 초당 프레임 변수 선언
+MOVE_LEFT = False # 오른쪽 이동키 눌림 여부
+MOVE_RIGHT = False # 왼쪽 이동키 눌림 여부
+PLAYER_FLIP = False # 플레이어 이미지 반전(플레이어가 보고있는 방향)
+GRAVITY = 1 # 중력
+GRAVITY_ACC = 0 # 축적된 중력의 총 크기(중력 가속도)
+MOVE_SPEED = 5 # 이동속도
+INIT_JUMP_POWER = 20 # 점프력(초기값)
+JUMP_POWER = INIT_JUMP_POWER # 현재 점프력
+JUMPING = False # 점프중인 상태
+ON_FOOTHOLD = False # 플레이어가 발판 위에 닿았는지 여부
+RUN = True # 메인 루프 실행 여부
 
 # 전달받은 이미지의 충돌 영역 정의(히트박스)
 def collision_rect(img, x, y):
@@ -59,82 +59,26 @@ def collision_rect(img, x, y):
 def detect_collision(rect1, rect2):
     return rect1.colliderect(rect2)
 
-# 충돌부위 검사
-def check_collision_part(player_rect):
-    collision_part = "" # 충돌부위
-    contact_pos = () # 접점
+# 충돌 검사할 부위, 오브젝트와 맞닿은 접선 반환
+def check_collision_part(player_rect, part="bottom"):
     foothold_indices = np.argwhere(MAP_DATA == 1) # 발판이 있는 모든 위치의 행, 열 인덱스가 저장된 배열
     # 발판 위치를 실제 좌표로 변환(행 번호 * 발판 높이, 열 번호 * 발판 너비)
     foothold_positions = foothold_indices * (FOOTHOLD_TILE.get_height(), FOOTHOLD_TILE.get_width())
     # 모든 발판의 충돌 영역 리스트 생성
     foothold_rects = [collision_rect(FOOTHOLD_TILE, pos[1], pos[0]) for pos in foothold_positions]
     for foothold_rect in foothold_rects:
-        if player_rect.colliderect(foothold_rect): # 플레이어가 발판과 충돌했는지 확인
-            distance_x = player_rect.centerx - foothold_rect.centerx # x좌표 차이
-            distance_y = player_rect.centery - foothold_rect.centery # y좌표 차이
-            if abs(distance_x) > abs(distance_y): # x좌표 차이가 y좌표 차이보다 클 경우
-                if distance_x > 0: # x좌표 차이가 양수이면
-                    tangent = foothold_rect.right # 접선
-                    contact_pos = (tangent, PLAYER_Y) # 접점
-                    collision_part = "left"
-                else:
-                    tangent = foothold_rect.left - PLAYER_IMG.get_width()
-                    contact_pos = (tangent, PLAYER_Y)
-                    collision_part = "right"
-            else:
-                if distance_y > 0: # y좌표 차이가 양수이면
-                    tangent = foothold_rect.bottom
-                    contact_pos = (PLAYER_X, tangent)
-                    collision_part = "top"
-                else:
-                    tangent = foothold_rect.top - PLAYER_IMG.get_height()
-                    contact_pos = (PLAYER_X, tangent + 1.5)
-                    collision_part = "bottom"
-            break
-    
-    return collision_part, contact_pos
+        if player_rect.colliderect(foothold_rect): # 플레이어가 오브젝트와 충돌했는지 확인
+            if part == "bottom":
+                return foothold_rect.top # 오브젝트 충돌영역의 윗변의 y좌표 반환
+            elif part == "left":
+                return foothold_rect.right # 오브젝트 충돌영역의 높이(오른쪽)의 x좌표 반환
+            elif part == "right":
+                return foothold_rect.left # 오브젝트 충돌영역의 높이(왼쪽)의 x좌표 반환
+            elif part == "top":
+                return foothold_rect.bottom # 오브젝트 충돌영역의 밑변의 y좌표 반환
 
 while RUN:
     FPS.tick(60) # 초당 화면에 그려낼 프레임 수(출력 횟수)
-
-    # <충돌 처리 로직>
-
-    player_rect = collision_rect(PLAYER_IMG, PLAYER_X, PLAYER_Y) # 플레이어 이미지의 충돌 영역 정의
-    collision_part, contact_pos = check_collision_part(player_rect)
-    
-    if collision_part == "left":
-        COLLISION_LEFT = True
-        if (PLAYER_X, PLAYER_Y) != contact_pos:
-            print("left")
-            PLAYER_X, PLAYER_Y = contact_pos[0], contact_pos[1]
-    else:
-        COLLISION_LEFT = False
-    
-    if collision_part == "right":
-        COLLISION_RIGHT = True
-        if (PLAYER_X, PLAYER_Y) != contact_pos:
-            print("right")
-            PLAYER_X, PLAYER_Y = contact_pos[0], contact_pos[1]
-    else:
-        COLLISION_RIGHT = False
-    
-    if collision_part == "top":
-        COLLISION_TOP = True
-        JUMP_POWER = 0 # 점프력을 0으로 변경하고 점프 기능에서 더이상 뛰어오르지 못하게 한다.
-        if (PLAYER_X, PLAYER_Y) != contact_pos:
-            print("top")
-            PLAYER_X, PLAYER_Y = contact_pos[0], contact_pos[1]
-    else:
-        COLLISION_TOP = False
-    
-    if collision_part == "bottom":
-        ON_FOOTHOLD = True
-        GRAVITY_ACC = 0 # 중력 가속도 초기화
-        if (PLAYER_X, PLAYER_Y) != contact_pos:
-            print("bottom")
-            PLAYER_X, PLAYER_Y = contact_pos[0], contact_pos[1]
-    else:
-        ON_FOOTHOLD = False
     
     # <이벤트 처리 로직>
 
@@ -153,41 +97,66 @@ while RUN:
                 MOVE_RIGHT = False # 오른쪽 이동 기능 비활성화
 
     keys = pg.key.get_pressed() # 키보드에서 눌린 키들
-    if keys[pg.K_LALT] and not JUMPING and ON_FOOTHOLD: # 왼쪽 ALT키가 눌려있고, 플레이어가 점프중이 아니고, 발판 위에 있으면
+    # 왼쪽 ALT키가 눌려있고, 플레이어가 점프중이 아니고, 발판 위에 있으면
+    if keys[pg.K_LALT] and not JUMPING and ON_FOOTHOLD:
         JUMPING = True # 점프 기능 활성화
 
     # <플레이어 이동 로직>
     
     # 좌우 이동 기능
     if MOVE_LEFT:
+        player_rect = collision_rect(PLAYER_IMG, PLAYER_X - MOVE_SPEED, PLAYER_Y)
+        object_right_tangent = check_collision_part(player_rect, part="left")
         # 플레이어가 좌측으로 충돌중이 아니고, 맵 좌측 끝부분 보다 멀리 있으면
-        if not COLLISION_LEFT and PLAYER_X > 0:
+        if PLAYER_X > 0 and not object_right_tangent:
             PLAYER_X -= MOVE_SPEED # 이동속도 수치만큼 왼쪽으로 이동
+        else:
+            if object_right_tangent:
+                PLAYER_X -= (PLAYER_X - object_right_tangent)
         if not PLAYER_FLIP: # 플레이어 이미지가 반전되지 않은 상태이면
             PLAYER_IMG = pg.transform.flip(PLAYER_IMG, True, False) # 플레이어 이미지 반전
             PLAYER_FLIP = True # 반전 상태로 변경
     elif MOVE_RIGHT:
+        player_rect = collision_rect(PLAYER_IMG, PLAYER_X + MOVE_SPEED, PLAYER_Y)
+        object_left_tangent = check_collision_part(player_rect, part="right")
         # 플레이어가 우측으로 충돌중이 아니고, 맵 우측 끝부분 보다 안쪽에 있으면
-        if not COLLISION_RIGHT and PLAYER_X < (
-            len(MAP_DATA[0]) * FOOTHOLD_TILE.get_width() - PLAYER_IMG.get_width()):
+        if PLAYER_X < (len(MAP_DATA[0]) * FOOTHOLD_TILE.get_width() - PLAYER_IMG.get_width()) and (
+            not object_left_tangent):
             PLAYER_X += MOVE_SPEED # 이동속도 수치만큼 오른쪽으로 이동
+        else:
+            if object_left_tangent:
+                PLAYER_X += (object_left_tangent - PLAYER_X - PLAYER_IMG.get_width())
         if PLAYER_FLIP: # 이미지 반전 상태이면
             PLAYER_IMG = pg.transform.flip(PLAYER_IMG, True, False) # 이미지 재반전
             PLAYER_FLIP = False # 반전 상태 초기화
 
     # 점프 기능
     if JUMPING: # 점프 기능이 활성화 되어있으면
-        if not COLLISION_TOP:
-            # print(JUMP_POWER)
+        player_rect = collision_rect(PLAYER_IMG, PLAYER_X, PLAYER_Y - JUMP_POWER)
+        object_bottom_tangent = check_collision_part(player_rect, part="top")
+        if not object_bottom_tangent:
             PLAYER_Y -= JUMP_POWER # 현재 점프력 수치만큼 플레이어를 위로 이동
             JUMP_POWER -= GRAVITY # 점프력 수치를 중력만큼 감소(매 루프마다 뛰어오르는 속도가 서서히 감소)
+        else:
+            PLAYER_Y -= (PLAYER_Y - object_bottom_tangent)
+            JUMP_POWER = 0
+        
         if JUMP_POWER <= 0: # 현재 점프력 수치가 0이하면
             JUMPING = False # 점프 기능 비활성화
+            ON_FOOTHOLD = False
             JUMP_POWER = INIT_JUMP_POWER # 점프력 수치 초기화
+    # 중력 기능
     else:
-        if not ON_FOOTHOLD: # 플레이어가 발판 위에 있지 않으면
-            GRAVITY_ACC += GRAVITY # 중력 가속도 변수에 중력을 축적(매 루프마다 아래로 떨어지는 속도가 서서히 증가)
+        GRAVITY_ACC += GRAVITY # 중력 가속도 변수에 중력을 축적(매 루프마다 아래로 떨어지는 속도가 서서히 증가)
+        player_rect = collision_rect(PLAYER_IMG, PLAYER_X, PLAYER_Y + GRAVITY_ACC)
+        object_top_tangent = check_collision_part(player_rect, part="bottom")
+        if not object_top_tangent:
             PLAYER_Y += GRAVITY_ACC # 현재 중력 가속도 수치만큼 플레이어를 아래로 이동
+            ON_FOOTHOLD = False
+        else:
+            PLAYER_Y += (object_top_tangent - PLAYER_Y - PLAYER_IMG.get_height())
+            ON_FOOTHOLD = True
+            GRAVITY_ACC = 0 # 중력 가속도 초기화
 
     # <출력 로직>
     
@@ -216,7 +185,7 @@ while RUN:
     # **플레이어를 포함한 맵에 존재하는 모든 오브젝트는 좌표를 항상 (PULL_X, PULL_Y)만큼 평행이동 시킨 후 그린다.**
     # 맵을 출력 화면쪽으로 당겨서 그리기(평행이동)
     foothold_indices = np.argwhere(MAP_DATA == 1)
-    foothold_positions = foothold_indices * (FOOTHOLD_TILE.get_height(), FOOTHOLD_TILE.get_width())
+    foothold_positions = foothold_indices * (FOOTHOLD_TILE.get_height(), FOOTHOLD_TILE.get_width()) # grid형식
     for pos in foothold_positions:
         x, y = pos[1], pos[0]
         # 발판의 실제 위치를 (PULL_X, PULL_Y)만큼 평행이동 시키고 발판 이미지 그리기
