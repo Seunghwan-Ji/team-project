@@ -170,16 +170,16 @@ while RUN:
     # 맵을 x축, y축으로 당길 수치(평행이동할 수치)
     # (0, 0) 위치로부터 x축 방향으로는 화면 가로 중간 너비만큼 떨어진 곳에 가상의 '깃발'이 있고,
     # y축 방향으로는 화면 세로 중간 높이만큼 떨어진 곳에 가상의 '깃발'이 있다고 가정
-    map_end_posX = len(MAP_DATA[0]) * FOOTHOLD_TILE.get_width() # 맵 끝 위치 x좌표
+    map_end_posX = len(MAP_DATA[0]) * FOOTHOLD_TILE.get_width() # 맵 끝 위치 x좌표(맵의 행에서 마지막 열 번호 * 타일 높이)
     if PLAYER_X >= map_end_posX - WINDOW_WIDTH / 2: # 플레이어 위치가 맵 오른쪽 끝에 다다를시
         PULL_X = map_end_posX - WINDOW_WIDTH # 화면 가로 중간너비 만큼만 덜 당기는 수치
     elif PLAYER_X >= WINDOW_WIDTH / 2: # 플레이어 위치가 깃발 위치보다 멀리있거나 같으면
         PULL_X = PLAYER_X - WINDOW_WIDTH / 2 # x축을 당길 수치 = 깃발 위치로부터 플레이어 위치까지의 x좌표 차이
     
-    map_end_posY = len(MAP_DATA) * FOOTHOLD_TILE.get_height() # 맵 끝 위치 y좌표
+    map_end_posY = len(MAP_DATA) * FOOTHOLD_TILE.get_height() # 맵 가장 아래쪽 y좌표(맵의 마지막 행 번호 * 타일 높이)
     if PLAYER_Y >= map_end_posY - WINDOW_HEIGHT / 2: # 플레이어 위치가 맵 아래쪽 끝에 다다를시
         PULL_Y = map_end_posY - WINDOW_HEIGHT # 화면 세로 중간높이 만큼만 덜 당기는 수치
-    elif PLAYER_Y >= WINDOW_HEIGHT / 2:
+    elif (PLAYER_Y >= WINDOW_HEIGHT / 2) or (PLAYER_Y <= WINDOW_HEIGHT / 2):
         PULL_Y = PLAYER_Y - WINDOW_HEIGHT / 2 # y축을 당길 수치 = 깃발 위치로부터 플레이어 위치까지의 y좌표 차이
 
     # **플레이어를 포함한 맵에 존재하는 모든 오브젝트는 좌표를 항상 (PULL_X, PULL_Y)만큼 평행이동 시킨 후 그린다.**
