@@ -50,7 +50,6 @@ for i in np.argwhere(MAP_DATA_ARR == 1): # 정적인 발판 객체에 속성을 
     type = "static" # 타입 속성명 설정
     Object_Info.FOOTHOLD_LAYER.append(Object_Info(i[0], i[1], type))
 
-
 # 동적인 발판 객체에 속성을 부여하고 발판 레이어 리스트에 추가
 for i in np.argwhere(MAP_DATA_ARR == 4): # 맵 배열에서 요소가 4인것
     type = "horizontal" # 타입 속성명 설정
