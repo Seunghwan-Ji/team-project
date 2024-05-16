@@ -7,7 +7,7 @@ WINDOW = pg.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT)) # 출력화면 창 �
 pg.display.set_caption("Platformer Game") # 창 상단바 제목
 
 # 텍스트 맵 파일을 읽어와서 리스트로 저장
-with open('map_data_2.txt', 'r') as file:
+with open('map_data_1.txt', 'r') as file:
     data = [list(map(int, list(line.strip()))) for line in file]
 
 # 데이터 리스트를 넘파이 2차원 배열로 변환
@@ -46,9 +46,11 @@ class Object_Info: # 모든 오브젝트의 정보를 담는 클래스 정의
         self.direction = direction # 동적인 타입의 이동 방향(상하좌우)
         self.move_speed = 3
 
-for i in np.argwhere(MAP_DATA_ARR == 1): # 정적인 발판 객체에 속성을 부여하고 발판 레이어 리스트에 추가
-    type = "static" # 타입 속성명 설정
-    Object_Info.FOOTHOLD_LAYER.append(Object_Info(i[0], i[1], type))
+for i in np.argwhere(MAP_DATA_ARR): # 정적인 발판 객체에 속성을 부여하고 발판 레이어 리스트에 추가
+    row, col = i[0], i[1] # i: 요소의 행렬 인덱스를 담고 있다.
+    if MAP_DATA_ARR[row, col] == 1:
+        type = "static" # 타입 속성명 설정
+        Object_Info.FOOTHOLD_LAYER.append(Object_Info(row, col, type))
 
 # 동적인 발판 객체에 속성을 부여하고 발판 레이어 리스트에 추가
 for i in np.argwhere(MAP_DATA_ARR == 4): # 맵 배열에서 요소가 4인것
@@ -117,7 +119,7 @@ def check_collision_part(player_rect, part):
                 return foothold_rect.bottom # 발판의 밑변의 y좌표와 발판 객체 반환
 
 while RUN:
-    FPS.tick(144) # 초당 화면에 그려낼 프레임 수(출력 횟수)
+    FPS.tick(60) # 초당 화면에 그려낼 프레임 수(출력 횟수)
     
     # <이벤트 처리 로직>
 
@@ -223,7 +225,8 @@ while RUN:
     map_end_posY = len(MAP_DATA_ARR) * FOOTHOLD_TILE.get_height() # 맵 가장 아래쪽 y좌표(맵의 마지막 행 번호 * 타일 높이)
     if PLAYER_Y >= map_end_posY - WINDOW_HEIGHT / 2: # 플레이어 위치가 맵 아래쪽 끝에 다다를시
         PULL_Y = map_end_posY - WINDOW_HEIGHT # 화면 세로 중간높이 만큼만 덜 당기는 수치
-    elif (PLAYER_Y >= WINDOW_HEIGHT / 2) or (PLAYER_Y <= WINDOW_HEIGHT / 2):
+    # elif (PLAYER_Y >= WINDOW_HEIGHT / 2) or (PLAYER_Y <= WINDOW_HEIGHT / 2):
+    elif (PLAYER_Y >= WINDOW_HEIGHT / 2):
         PULL_Y = PLAYER_Y - WINDOW_HEIGHT / 2 # y축을 당길 수치 = 깃발 위치로부터 플레이어 위치까지의 y좌표 차이
 
     # **플레이어를 포함한 맵에 존재하는 모든 오브젝트는 좌표를 항상 (PULL_X, PULL_Y)만큼 평행이동 시킨 후 그린다.**
