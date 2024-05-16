@@ -42,14 +42,7 @@ class Player:
             else:
                 self.x += (object_left_tangent - self.x - self.width)
         
-        if self.direction == "left": # 왼쪽을 보고 있으면
-            self.direction = "right"
-            if not self.flip:
-                self.image = self.flip_img
-                self.flip = True
-            else:
-                self.image = self.normal_img
-                self.flip = False
+        flip_image_direction(self, "right")
     
     def moving_left(self): # 좌측 이동 기능
         player_rect = collision_rect(self.image, self.x - self.move_speed, self.y)
@@ -62,14 +55,7 @@ class Player:
             else:
                 self.x -= (self.x - object_right_tangent)
 
-        if self.direction == "right": # 플레이어 이미지가 오른쪽을 보고 있으면
-            self.direction = "left" # 방향 상태 변경
-            if not self.flip:
-                self.image = self.flip_img # 이미지 반전
-                self.flip = True # 반전 상태로 변경
-            else:
-                self.image = self.normal_img # 원래 이미지로
-                self.flip = False
+        flip_image_direction(self, "left")
 
     def moving_jump(self): # 점프 기능
         player_rect = collision_rect(self.image, self.x, self.y - self.jump_power)
@@ -300,27 +286,12 @@ class Map:
         # 몬스터 그리기
         for monster in CURR_MAP.monster_layer:
             if monster.name == "요괴" or monster.name == "토끼":
-                if monster.direction == "left":
-                    if monster.init_x - monster.x >= 1000:
-                        monster.move_speed *= -1
-                        
-                        if not monster.flip:
-                            monster.image = monster.flip_img
-                            monster.flip = True
-                        else:
-                            monster.image = monster.normal_img
-                            monster.flip = False
-                        
-                    elif monster.init_x < monster.x:
-                        monster.move_speed *= -1
-
-                        monster.direction = "left" # 방향 상태 변경
-                        if not monster.flip:
-                            monster.image = monster.flip_img # 이미지 반전
-                            monster.flip = True # 반전 상태로 변경
-                        else:
-                            monster.image = monster.normal_img # 원래 이미지로
-                            monster.flip = False
+                if monster.init_x - monster.x >= 1000:
+                    monster.move_speed *= -1
+                    flip_image_direction(monster, "right")
+                elif monster.init_x < monster.x:
+                    monster.move_speed *= -1
+                    flip_image_direction(monster, "left")
                 
                 monster.x += monster.move_speed
                 player_rect = collision_rect(CURR_CHAR.image, CURR_CHAR.x, CURR_CHAR.y) # 플레이어 충돌영역
@@ -338,8 +309,8 @@ class Object:
     def __init__(self, image, x, y, type=None, direction=None, move_speed=None, name=None):
         self.normal_img = image
         self.flip_img = pg.transform.flip(image, True, False) # 반전된 이미지
-        self.image = self.normal_img # 현재 이미지
         self.flip = False # 이미지 반전 여부
+        self.image = self.normal_img # 현재 이미지
         self.init_x, self.init_y = x, y # 초기 좌표
         self.x, self.y = self.init_x, self.init_y # 실시간 좌표
         self.type = type # 타입명
@@ -378,6 +349,16 @@ def request_draw_curr_map(map_name): # 현재 플레이중인 맵 그리기 요�
 def request_event_process(char): # 현재 플레이중인 캐릭터의 키 이벤트 처리 요청
     if char == NINJA_FROG:
         char.ninja_frog_key_event()
+
+def flip_image_direction(object, direction): # 전달받은 방향대로 이미지를 반전시켜주는 함수
+    if object.direction != direction:
+        object.direction = direction # 방향 변경
+        if not object.flip:
+            object.image = object.flip_img # 반전된 이미지로 변경
+            object.flip = True # 반전 상태로 변경
+        else:
+            object.image = object.normal_img # 원래 이미지로
+            object.flip = False
 
 # 글로벌 변수
 WINDOW_WIDTH, WINDOW_HEIGHT = 1200, 800 # 출력화면 창의 너비, 높이
