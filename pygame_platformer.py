@@ -274,7 +274,7 @@ class Map:
         # 발판 레이어 그리기
         for foothold in self.foothold_layer:
             if foothold.type == "horizontal_foothold": # 수평적 발판
-                foothold.horizontal_motion(distance=2000, flip=False)
+                foothold.horizontal_motion(distance=2000)
             elif foothold.type == "vertical_foothold": # 수직적 발판
                 foothold.vertical_motion(distance=2000)
             
@@ -299,7 +299,7 @@ class Map:
         # 장애물 레이어 그리기
         for obstacle in self.obstacle_layer:
             if obstacle.name == "트램펄린":
-                obstacle.bounce(object=CURR_CHAR, direction="up", power=100, count=10)
+                obstacle.bounce(object=CURR_CHAR, direction="up", power=50, count=10)
                 WINDOW.blit(obstacle.image, (obstacle.x - CURR_CHAR.pull_x, obstacle.y - CURR_CHAR.pull_y))
 
 class Object:
@@ -320,23 +320,21 @@ class Object:
         self.bounce_count = 0 # 바운스 횟수
     
     # 오브젝트 기능 추가
-    def horizontal_motion(self, distance, flip=True): # 수평이동 기능
+    def horizontal_motion(self, distance): # 수평이동 기능
         if self.direction == "right":
             if self.x < self.init_x + distance:
                 self.x += self.move_speed
             else:
                 self.init_x += distance
                 self.x = self.init_x
-                if flip:
-                    flip_image_direction(self, "left")
+                flip_image_direction(self, "left")
         elif self.direction == "left":
             if self.x > self.init_x - distance:
                 self.x -= self.move_speed
             else:
                 self.init_x -= distance
                 self.x = self.init_x
-                if flip:
-                    flip_image_direction(self, "right")
+                flip_image_direction(self, "right")
 
     def vertical_motion(self, distance): # 수직이동 기능
         if self.direction == "up":
