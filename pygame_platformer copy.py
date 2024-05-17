@@ -5,7 +5,7 @@ import requests
 import json
 import datetime
 import threading
-import weather
+import time
 pg.init()
 
 # 객체를 생성하는 클래스 정의
@@ -166,11 +166,19 @@ class Map:
         # 모든 맵의 고유 속성
         self.name = name
         self.data_indices = np.indices((len(self.data_arr), len(self.data_arr[0]))) # 데이터 인덱스 배열 생성(행 배열, 열 배열)
-        self.grid_height, self.grid_width = 1, 1 # 그리드 한 칸의 사이즈
+        self.grid_width, self.grid_height = 1, 1 # 그리드 한 칸의 사이즈
+        self.width, self.height = None, None # 맵의 전체 너비, 높이
         self.gravity = 1 # 중력
         self.background_image = None # 배경 이미지
         self.bg_x, self.bg_y = 0, 0 # 배경 이미지 위치
         self.init_player_pos = 0, 0 # 플레이어 스폰 위치
+        self.month = datetime.datetime.now().month # 현재 월 저장
+        self.season = BG_PATH[0] if FIX_BG else decide_season(self.month) # 현재 월의 계절 저장
+        self.hour = datetime.datetime.now().hour # 현재 시각 저장
+        self.timeslot = BG_PATH[1] if FIX_BG else decide_timeslot(self.hour) # 현재 시각의 시간대 저장
+        self.weather = BG_PATH[2] if FIX_BG else request_weather(self.name) # 지역의 날씨 저장
+        self.cap = cv2.VideoCapture(f"video/{self.season}/{self.timeslot}/{self.weather}.mp4") # 영상 로드
+        self.ret, self.frame = self.cap.read() # 프레임 읽기 시작
 
         # 비슷한 유형의 오브젝트들끼리 나눠서 리스트에 저장
         self.foothold_layer = []
@@ -183,9 +191,24 @@ class Map:
             self.seoul()
     
     def draw_background(self): # 배경 그리기 기능
+        frame_rgb = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB) # 현재 프레임을 rgb형식으로 변환
+        background_image = pg.image.frombuffer(frame_rgb.tobytes(), frame_rgb.shape[1::-1], "RGB") # rgb를 이미지로 변환
+        
+        # 이미지를 맵의 전체 너비, 높이 속성만큼 사이즈 업
+        self.background_image = pg.transform.scale(background_image, (self.width, self.height))
+
+        # 이미지 그리기
         WINDOW.blit(self.background_image, (self.bg_x - CURR_CHAR.pull_x, self.bg_y - CURR_CHAR.pull_y))
 
-    def draw_player(self): # 플레이어 그리기 기능
+        self.ret, self.frame = self.cap.read() # 다음 프레임 읽기
+        if not self.ret: # 모든 프레임이 끝나서 읽어지지 않는다면
+            if not FIX_BG: # 배경 고정 모드가 아니면
+                # 프레임 끝날때마다 속성값 참조하여 영상 업데이트
+                self.cap = cv2.VideoCapture(f"video/{self.season}/{self.timeslot}/{self.weather}.mp4")
+            self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0) # 0번째 인덱스 프레임으로 이동
+            self.ret, self.frame = self.cap.read() # 다시 읽기 시작
+
+    def draw_player(self): # 플레이어 이미지 그리기 기능
         # 플레이어의 실제 위치를 (pull_x, pull_y)만큼 평행이동 시키고 플레이어 이미지 그리기
         WINDOW.blit(CURR_CHAR.image, (CURR_CHAR.x - CURR_CHAR.pull_x, CURR_CHAR.y - CURR_CHAR.pull_y))
 
@@ -201,13 +224,14 @@ class Map:
         # 데이터 인덱스 배열(행 배열, 열 배열)에 그리드 사이즈 적용
         self.data_indices[0] *= self.grid_height
         self.data_indices[1] *= self.grid_width
+
+        # 맵의 전체 너비, 높이 계산
+        end_x, end_y = read_coordinate(self.data_indices, -1, -1) # 데이터 인덱스 배열에서 마지막 행, 마지막 열의 좌표
+        self.width, self.height = end_x + self.grid_width, end_y + self.grid_height # 가로 세로 각각 그리드 한 칸 만큼 더 늘려서 적용(1픽셀 확장)
         
         # 배경 이미지 로드
-        background_image = pg.image.load("img/Brown.png")
-        end_x, end_y = read_coordinate(self.data_indices, -1, -1) # 데이터 인덱스 배열에서 마지막 행, 마지막 열의 좌표
-
-        # 가로 세로 각각 그리드 한 칸 만큼 더 늘려서 적용(1픽셀 확장)
-        self.background_image = pg.transform.scale(background_image, (end_x + self.grid_width, end_y + self.grid_height))
+        # background_image = pg.image.load("img/Brown.png")
+        # self.background_image = pg.transform.scale(background_image, (self.width, self.height))
 
         # 이 맵의 플레이어 초기 위치
         pos_index = np.argwhere(self.data_arr == 9)[0]
@@ -469,6 +493,62 @@ def flip_image_direction(object, direction): # 전달받은 방향대로 이미�
             object.image = object.normal_img # 원래 이미지로
             object.flip = False
 
+def decide_season(month): # 현재 월에 대한 계절 반환
+    if month >= 3 and month < 6:
+        return "spring"
+    elif month >= 6 and month < 9:
+        return "summer"
+    elif month >= 9 and month < 12:
+        return "fall"
+    elif month == 12 or month == 1 or month == 2:
+        return "winter"
+
+def decide_timeslot(hour): # 현재 시각에 대한 시간대 반환
+    if hour >= 0 and hour < 6:
+        return "midnight"
+    if hour >= 6 and hour < 12:
+        return "morning"
+    if hour >= 12 and hour < 18:
+        return "daytime"
+    if hour >= 18 and hour < 24:
+        return "evening"
+
+def request_weather(city): # 현재 지역의 날씨 반환
+    apiKey = "34160e089147db88b9f126c63909254a" # api key
+    lang = 'kr' # 언어
+    units = 'metric' # 화씨 온도를 섭씨 온도로 변경
+    api = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={apiKey}&lang={lang}&units={units}" # 주소
+
+    result = requests.get(api) # 요청
+    data = json.loads(result.text) # 데이터 반환
+
+    return data['weather'][0]['main'] # 날씨
+
+def update_time_and_weather(): # 주기적으로 계절, 시간, 날씨를 분석해주는 함수(스레드가 입장하는 함수)
+    while not FIX_BG: # 배경 고정 모드가 아니면 반복
+        curr_month = datetime.datetime.now().month # 현재 월
+        if CURR_MAP.month != curr_month:
+            CURR_MAP.month = curr_month # 현재 맵의 월 속성 업데이트
+        
+        curr_season = decide_season(CURR_MAP.month) # 계절 반환 함수 호출
+        if CURR_MAP.season != curr_season:
+            CURR_MAP.season = curr_season # 계절 속성 업데이트
+        
+        curr_hour = datetime.datetime.now().hour # 현재 시각
+        if CURR_MAP.hour != curr_hour:
+            CURR_MAP.hour = curr_hour # 시각 속성 업데이트
+
+        curr_timeslot = decide_timeslot(CURR_MAP.hour) # 시간대 반환 함수 호출
+        if CURR_MAP.timeslot != curr_timeslot:
+            CURR_MAP.timeslot = curr_timeslot # 시간대 속성 업데이트
+
+        weather = request_weather(CURR_MAP.name) # 날씨 반환 함수 호출
+        if weather != CURR_MAP.weather:
+            CURR_MAP.weather = weather # 날씨 속성 업데이트
+
+        print(f"{CURR_MAP.month}월({CURR_MAP.season}), {CURR_MAP.hour}시({CURR_MAP.timeslot}), 날씨: {CURR_MAP.weather}")
+        time.sleep(60) # 60초마다 한번씩 분석
+
 # 글로벌 변수
 WINDOW_WIDTH, WINDOW_HEIGHT = 1200, 800 # 출력화면 창의 너비, 높이
 WINDOW = pg.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT)) # 출력화면 창 정의
@@ -477,12 +557,12 @@ pg.display.set_caption("Platformer Game") # 창 상단바 제목
 CLOCK = pg.time.Clock() # 게임 시간
 FPS = 60 # 초당 프레임
 RUN = True # 루프문 실행 여부
-CAP = cv2.VideoCapture(weather.image_path) # 영상을 가져와서 cap에 저장
-_, frame = CAP.read() # cap 에서 frame이 제대로 읽어졌으면 _은 True 아니면 False가 됨, 이미지는 frame 에 읽음
+FIX_BG = False # 배경 고정 모드
+BG_PATH = ["winter", "daytime", "Snow"] # 고정할 배경 영상 폴더 경로(각 폴더 이름만)
 
 # 캐릭터 객체 추가
 NINJA_FROG = Player(image_path="img/player_2.png", direction="right",
-    move_speed=5, jump_power=80, weight=0.4) # 플레이어 객체 생성
+    move_speed=5, jump_power=50, weight=0.4) # 플레이어 객체 생성
 
 # 현재 플레이중인 캐릭터
 CURR_CHAR = NINJA_FROG
@@ -493,12 +573,13 @@ SEOUL = Map(map_data="seoul.txt", name="seoul") # 맵 객체 생성
 # 현재 플레이중인 맵
 CURR_MAP = SEOUL
 
+# 스레드 생성
+THREAD = threading.Thread(target=update_time_and_weather) # 스레드가 입장할 함수
+THREAD.daemon = True # 메인스레드가 종료될 때 이 스레드도 같이 종료
+THREAD.start() # 스레드 시작
+
 # 메인 루프
 while RUN:
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    background_image = pg.image.frombuffer(frame_rgb.tobytes(), frame_rgb.shape[:2][::-1], "RGB") # frame에 담겨있는 이미지파일을 pygame 화면에 맞게 바꿈
-    CURR_MAP.background_image = pg.transform.scale(background_image, (CURR_MAP.data_indices[1][-1][-1]+96, CURR_MAP.data_indices[0][-1][-1]+96)) #변환한 비디오 frame 이미지를 맵 사이즈에 맞게 리사이징
-
     CLOCK.tick(FPS) # 초당 루프문을 수행하는 횟수(게임 진행속도)
     
     # <현재 캐릭터의 키 이벤트 처리 요청>
@@ -512,10 +593,5 @@ while RUN:
     
     # 업데이트 사항 출력
     pg.display.update()
-
-    ret, frame = CAP.read() # 다음 순서의 화면 불러오기
-    if not ret: # 다음 순서화면이 없으면(영상이 끝나면) ret이 False면 다음 frame이미지가 제대로 읽어지지않은것.
-        CAP.set(cv2.CAP_PROP_POS_FRAMES, 3) #cap을 3번째 컷으로 옮겨서 읽음
-        ret, frame = CAP.read()
 
 pg.quit() # 파이게임 종료
