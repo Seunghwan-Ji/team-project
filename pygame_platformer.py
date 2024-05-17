@@ -29,6 +29,8 @@ class Player:
         self.key_left = False # 왼쪽 방향키 눌림 여부
         self.x, self.y = 0, 0 # 현재 위치
         self.pull_x, self.pull_y = 0, 0 # 평행이동할 수치(x축, y축의 깃발과 떨어진 거리)
+        self.bouncing = False # 바운스 상태
+        self.bounce_count = 0 # 바운스 횟수
     
     def move_right(self): # 우측 이동 기능
         player_rect = collision_rect(self.image, self.x + self.move_speed, self.y)
@@ -250,6 +252,11 @@ class Map:
                 image = change_image_size(pg.image.load("img/Apple.png"), 2)
                 type = "item"
                 name = "사과"
+            elif self.data_arr[row, col] == 8:
+                image = change_image_size(pg.image.load("img/Trampoline.png"), 2)
+                type = "obstacle"
+                name = "트램펄린"
+            
             if type == "static_foothold" or type == "horizontal_foothold" or type == "vertical_foothold":
                 self.foothold_layer.append(Object(image, x, y, type, direction, move_speed, name))
             elif type == "monster":
@@ -258,6 +265,9 @@ class Map:
             elif type == "item":
                 y -= ((y + image.get_height()) - (y + self.grid_height))
                 self.item_layer.append(Object(image, x, y, type, direction, move_speed, name))
+            elif type == "obstacle":
+                y -= ((y + image.get_height()) - (y + self.grid_height))
+                self.obstacle_layer.append(Object(image, x, y, type, direction, move_speed, name))
 
     # 정의한 맵을 그리는 메서드 추가
     def draw_seoul_map(self): # 서울맵 그리기 기능
@@ -283,8 +293,14 @@ class Map:
         # 아이템 레이어 그리기
         for item in self.item_layer:
             if item.name == "사과":
-                item.bulk_up(self.item_layer, CURR_CHAR, size=2)
+                item.bulk_up(layer=self.item_layer, object=CURR_CHAR, size=2)
                 WINDOW.blit(item.image, (item.x - CURR_CHAR.pull_x, item.y - CURR_CHAR.pull_y))
+        
+        # 장애물 레이어 그리기
+        for obstacle in self.obstacle_layer:
+            if obstacle.name == "트램펄린":
+                obstacle.bounce(object=CURR_CHAR, direction="up", power=100, count=10)
+                WINDOW.blit(obstacle.image, (obstacle.x - CURR_CHAR.pull_x, obstacle.y - CURR_CHAR.pull_y))
 
 class Object:
     def __init__(self, image, x, y, type=None, direction=None, move_speed=None, name=None):
@@ -300,6 +316,8 @@ class Object:
         self.direction = direction # 이동방향
         self.move_speed = move_speed # 이동속도
         self.name = name # 이름
+        self.bouncing = False # 바운스 상태
+        self.bounce_count = 0 # 바운스 횟수
     
     # 오브젝트 기능 추가
     def horizontal_motion(self, distance, flip=True): # 수평이동 기능
@@ -336,6 +354,29 @@ class Object:
                 self.y = self.init_y
                 self.direction = "up"
 
+    def prevent_overlap(self, object, move_speed): # 객체가 충돌되지 않게 막는 기능
+        self_rect = self.collision_rect(self.image, self.x, self.y)
+        object_rect = None
+        distance = 0
+        if object.direction == "right":
+            object_rect = object.collision_rect(object.image, object.x + move_speed, object.y)
+            distance = self_rect.left - object.x - object.width
+        elif object.direction == "left":
+            object_rect = object.collision_rect(object.image, object.x - move_speed, object.y)
+            distance = self_rect.right - object.x
+        elif object.direction == "up":
+            object_rect = object.collision_rect(object.image, object.x, object.y - move_speed)
+            distance = self_rect.bottom - object.y
+        elif object.direction == "down":
+            object_rect = object.collision_rect(object.image, object.x, object.y + move_speed)
+            distance = self_rect.top - object.y + object.height
+
+        if self_rect.colliderect(object_rect):
+            if object.direction == "right" or object.direction == "left":
+                object.x += distance
+            else:
+                object.y += distance
+
     def push_object(self, object): # 충돌한 객체를 밀어내는 기능
         self_rect = collision_rect(self.image, self.x, self.y)
         object_rect = collision_rect(object.image, object.x, object.y)
@@ -345,7 +386,7 @@ class Object:
             elif self.direction == "left":
                 object.x = self_rect.left - object.width # 왼쪽 접선에 배치
 
-    def receive_damage(self): # 충돌한 객체가 데미지를 받는 기능
+    def deal_damage(self): # 충돌한 객체에 데미지를 입히는 기능
         pass
 
     def bulk_up(self, layer, object, size): # 충돌한 객체의 크기와 중량을 커지게 하는 기능
@@ -357,6 +398,27 @@ class Object:
             object.weight *= size
             object.y -= (object.height - init_height)
             layer.remove(self)
+
+    def bounce(self, object, direction, power, count): # 충돌한 객체를 튕겨내는 기능
+        if not object.bouncing:
+            self_rect = collision_rect(self.image, self.x, self.y)
+            object_rect = collision_rect(object.image, object.x, object.y)
+            if self_rect.colliderect(object_rect):
+                object.bouncing = True
+        
+        if object.bouncing:
+            if direction == "up":
+                object.y -= power
+            elif direction == "right":
+                object.x += power
+            elif direction == "left":
+                object.x -= power
+            
+            object.bounce_count += 1
+
+            if object.bounce_count == count:
+                object.bounce_count = 0
+                object.bouncing = False
 
 # 함수
 def change_image_size(image, size, object=None): # 이미지 사이즈 조절
