@@ -35,35 +35,41 @@ class Player:
     
     # 플레이어 기능 메서드 추가
     def move_right(self): # 우측 이동 기능
-        player_rect = collision_rect(self.image, self.x + self.move_speed, self.y)
+        player_rect = pg.Rect(self.x + self.move_speed, self.y, self.width, self.height)
         object_left_tangent = check_collision(CURR_MAP.foothold_layer, player_rect, part="right")
         
         # 플레이어가 우측으로 충돌중이 아니고, 맵 우측 끝부분 보다 안쪽에 있으면
         map_end_x = read_coordinate(CURR_MAP.data_indices, -1, -1)[0]
         map_end_x += CURR_MAP.grid_width
         if self.x < map_end_x:
+
+            # self.x += self.move_speed
+
             if not object_left_tangent:
                 self.x += self.move_speed # 이동속도 수치만큼 오른쪽으로 이동
             else:
                 self.x += (object_left_tangent - self.x - self.width)
         
-        flip_image_direction(self, "right")
+        flip_image_direction(object=self, direction="right")
     
     def move_left(self): # 좌측 이동 기능
-        player_rect = collision_rect(self.image, self.x - self.move_speed, self.y)
+        player_rect = pg.Rect(self.x - self.move_speed, self.y, self.width, self.height)
         object_right_tangent = check_collision(CURR_MAP.foothold_layer, player_rect, part="left")
         
         # 플레이어가 좌측으로 충돌중이 아니고, 맵 좌측 끝부분 보다 멀리 있으면
         if self.x > 0:
+            
+            # self.x -= self.move_speed
+
             if not object_right_tangent:
                 self.x -= self.move_speed # 이동속도 수치만큼 왼쪽으로 이동
             else:
                 self.x -= (self.x - object_right_tangent)
         
-        flip_image_direction(self, "left")
+        flip_image_direction(object=self, direction="left")
 
     def jump(self): # 점프 기능
-        player_rect = collision_rect(self.image, self.x, self.y - self.jump_power)
+        player_rect = pg.Rect(self.x, self.y - self.jump_power, self.width, self.height)
         object_bottom_tangent = check_collision(CURR_MAP.foothold_layer, player_rect, part="top")
         if not object_bottom_tangent:
             # print("점프중")
@@ -83,7 +89,7 @@ class Player:
     def apply_gravity(self): # 중력 적용 기능
         # 중력 가속도 변수에 (중력+중량)을 축적(매 루프마다 아래로 떨어지는 속도가 서서히 증가)
         self.gravity_acc += (CURR_MAP.gravity + self.weight)
-        player_rect = collision_rect(self.image, self.x, self.y + self.gravity_acc)
+        player_rect = pg.Rect(self.x, self.y + self.gravity_acc, self.width, self.height)
         collision = check_collision(CURR_MAP.foothold_layer, player_rect, part="bottom")
         if not collision:
             # print("낙하중")
@@ -186,10 +192,12 @@ class Map:
         self.ret, self.frame = self.cap.read() # 프레임 읽기 시작
 
         # 비슷한 유형의 오브젝트들끼리 나눠서 리스트에 저장
-        self.foothold_layer = []
-        self.monster_layer = []
-        self.obstacle_layer = []
-        self.item_layer = []
+        self.static_objects = [] # 정적인 객체 모음
+        self.dynamic_objects = [] # 동적인 객체 모음
+        self.foothold_layer = [] # 발판 레이어
+        self.obstacle_layer = [] # 장애물 레이어
+        self.monster_layer = [] # 몬스터 레이어
+        self.item_layer = [] # 아이템 레이어
 
         # 맵 이름마다 조건을 달아주고 맵을 정의하는 메서드 호출
         if self.name == "seoul":
@@ -214,7 +222,7 @@ class Map:
             self.ret, self.frame = self.cap.read() # 다시 읽기 시작
 
     def draw_object(self): # 오브젝트 그리기 기능
-        for object in (self.foothold_layer + self.monster_layer + self.item_layer + self.obstacle_layer):
+        for object in (self.foothold_layer + self.obstacle_layer + self.monster_layer + self.item_layer):
             WINDOW.blit(object.image, (object.x - CURR_CHAR.pull_x, object.y - CURR_CHAR.pull_y))
 
     def draw_player(self): # 플레이어 그리기 기능
@@ -243,78 +251,99 @@ class Map:
         # self.background_image = pg.transform.scale(background_image, (self.width, self.height))
 
         # 이 맵의 플레이어 초기 위치
-        pos_index = np.argwhere(self.data_arr == 9)[0]
-        CURR_CHAR.x, CURR_CHAR.y = read_coordinate(self.data_indices, pos_index[0], pos_index[1])
+        # pos_index = np.argwhere(self.data_arr == 9)[0]
+        # CURR_CHAR.x, CURR_CHAR.y = read_coordinate(self.data_indices, pos_index[0], pos_index[1])
 
         for i in np.argwhere(self.data_arr):
             row, col = i[0], i[1] # i: 요소의 행렬 인덱스를 담고 있다.(i[0]: 행 인덱스, i[1]: 열 인덱스)
+            var = self.data_arr[row, col]
             x, y = read_coordinate(self.data_indices, row, col) # 오브젝트를 배치할 좌표
             
             image = foothold_image
+            is_dynamic = False
             type = None
             direction = None
             move_speed = None
             name = None
 
-            if self.data_arr[row, col] == 1:
+            if var == 1:
                 type = "static_foothold"
-            elif self.data_arr[row, col] == 2:
+            elif var == 2:
+                is_dynamic = True
                 type = "horizontal_foothold"
                 direction = "right"
                 move_speed = 3
-            elif self.data_arr[row, col] == 3:
+            elif var == 3:
+                is_dynamic = True
                 type = "vertical_foothold"
                 direction = "up"
                 move_speed = 3
-            elif self.data_arr[row, col] == 4:
-                type = "horizontal_foothold"
-                direction = "left"
-                move_speed = 3
-            elif self.data_arr[row, col] == 5:
+            elif var == 4:
+                type = "turning point"
+            elif var == 5:
+                is_dynamic = True
                 image = change_image_size(pg.image.load("img/Goblin.png"), 1/3)
                 type = "monster"
                 direction = "left"
                 move_speed = 2
                 name = "요괴"
-            elif self.data_arr[row, col] == 6:
+            elif var == 6:
+                is_dynamic = True
                 image = pg.image.load("img/Rabbit.png")
                 type = "monster"
                 direction = "left"
                 move_speed = 3
                 name = "토끼"
-            elif self.data_arr[row, col] == 7:
+            elif var == 7:
                 image = change_image_size(pg.image.load("img/Melon.png"), 4)
                 type = "item"
                 name = "수박"
-            elif self.data_arr[row, col] == 8:
+            elif var == 8:
                 image = change_image_size(pg.image.load("img/Trampoline.png"), 4)
                 type = "obstacle"
                 name = "트램펄린"
+            elif var == 9:
+                CURR_CHAR.x, CURR_CHAR.y = x, y # 이 맵의 플레이어 초기 위치
             
-            if type == "static_foothold" or type == "horizontal_foothold" or type == "vertical_foothold":
-                self.foothold_layer.append(Object(image, x, y, type, direction, move_speed, name))
+            object = Object(is_dynamic, image, x, y, type, direction, move_speed, name)
+
+            # 장애물, 몬스터, 아이템 등등 발판위에 배치하도록 하는 y값 저장
+            on_foothold_y = (y + image.get_height()) - (y + self.grid_height)
+
+            if is_dynamic:
+                self.dynamic_objects.append(object)
+            else:
+                self.static_objects.append(object)
+
+            if (type == "static_foothold" or type == "horizontal_foothold" or
+                type == "vertical_foothold"):
+                self.foothold_layer.append(object)
             elif type == "monster":
-                y -= ((y + image.get_height()) - (y + self.grid_height)) # 발판 위에 닿도록 위치변경
-                self.monster_layer.append(Object(image, x, y, type, direction, move_speed, name))
+                object.y -= on_foothold_y
+                self.monster_layer.append(object)
             elif type == "item":
-                y -= ((y + image.get_height()) - (y + self.grid_height))
-                self.item_layer.append(Object(image, x, y, type, direction, move_speed, name))
+                object.y -= on_foothold_y
+                self.item_layer.append(object)
             elif type == "obstacle":
-                y -= ((y + image.get_height()) - (y + self.grid_height))
-                self.obstacle_layer.append(Object(image, x, y, type, direction, move_speed, name))
+                object.y -= on_foothold_y
+                self.obstacle_layer.append(object)
 
     # 정의한 맵의 기능 메서드 추가
     def update_seoul(self): # 서울맵 기능
         # 발판 기능
         for foothold in self.foothold_layer:
             if foothold.type == "horizontal_foothold": # 수평적 발판
-                foothold.horizontal_motion(distance=2000)
+                foothold.horizontal_motion(distance=3000, flip_img=False)
+                foothold.dynamic_blocks_dynamic(dynamic_obj=CURR_CHAR)
             elif foothold.type == "vertical_foothold": # 수직적 발판
-                foothold.vertical_motion(distance=2000)
-            
-            if foothold.type != "static_foothold":
-                foothold.push_object(CURR_CHAR)
+                foothold.vertical_motion(distance=3000)
+                foothold.dynamic_blocks_dynamic(dynamic_obj=CURR_CHAR)
         
+        # 장애물 기능
+        for obstacle in self.obstacle_layer:
+            if obstacle.name == "트램펄린":
+                obstacle.bounce_up(object=CURR_CHAR, power=30, count=20)
+
         # 몬스터 기능
         for monster in self.monster_layer:
             if monster.name == "요괴" or monster.name == "토끼":
@@ -325,13 +354,17 @@ class Map:
             if item.name == "수박":
                 item.bulk_up(layer=self.item_layer, object=CURR_CHAR, size=3)
         
-        # 장애물 기능
-        for obstacle in self.obstacle_layer:
-            if obstacle.name == "트램펄린":
-                obstacle.bounce_up(object=CURR_CHAR, power=30, count=20)
+        # 객체간 충돌 막기
+        for static in self.static_objects:
+            for dynamic in self.dynamic_objects:
+                if static.type == "몬스터":
+                    static.static_blocks_dynamic(dynamic_obj=dynamic, reverse_direction=True, flip_img=True)
+                else:
+                    static.static_blocks_dynamic(dynamic_obj=dynamic, reverse_direction=True)
 
 class Object:
-    def __init__(self, image, x, y, type=None, direction=None, move_speed=None, name=None):
+    def __init__(self, is_dynamic, image, x, y, type=None, direction=None, move_speed=None, name=None):
+        self.is_dynamic = is_dynamic # 동적인가? true or false
         self.normal_img = image
         self.flip_img = pg.transform.flip(image, True, False) # 반전된 이미지
         self.flip = False # 이미지 반전 여부
@@ -346,23 +379,43 @@ class Object:
         self.name = name # 이름
         self.bouncing = False # 바운스 상태
         self.bounce_count = 0 # 바운스 횟수
+        self.rect = None
+
+        # 정적 객체만 충돌영역 설정
+        if not self.is_dynamic:
+            if not self.image: # 이미지가 없는 객체는 그리드 한 칸 사이즈로 설정
+                self.width, self.height = CURR_MAP.grid_width, CURR_MAP.grid_height
+            # 충돌영역 설정
+            self.rect = pg.Rect(self.x, self.y, self.width, self.height)
     
     # 오브젝트 기능 메서드 추가
-    def horizontal_motion(self, distance): # 수평이동 기능
+    def horizontal_motion(self, distance, flip_img=True): # 수평이동 기능
         if self.direction == "right":
-            if self.x < self.init_x + distance:
+            if distance:
+                if self.x < self.init_x + distance:
+                    self.x += self.move_speed
+                else:
+                    self.init_x += distance
+                    self.x = self.init_x
+                    if flip_img:
+                        flip_image_direction(object=self, direction="left")
+                    else:
+                        self.direction = "left"
+            else:
                 self.x += self.move_speed
-            else:
-                self.init_x += distance
-                self.x = self.init_x
-                flip_image_direction(self, "left")
         elif self.direction == "left":
-            if self.x > self.init_x - distance:
-                self.x -= self.move_speed
+            if distance:
+                if self.x > self.init_x - distance:
+                    self.x -= self.move_speed
+                else:
+                    self.init_x -= distance
+                    self.x = self.init_x
+                    if flip_img:
+                        flip_image_direction(object=self, direction="right")
+                    else:
+                        self.direction = "right"
             else:
-                self.init_x -= distance
-                self.x = self.init_x
-                flip_image_direction(self, "right")
+                self.x -= self.move_speed
 
     def vertical_motion(self, distance): # 수직이동 기능
         if self.direction == "up":
@@ -380,45 +433,58 @@ class Object:
                 self.y = self.init_y
                 self.direction = "up"
 
-    def prevent_overlap(self, object, move_speed): # 객체가 충돌되지 않게 막는 기능
-        self_rect = self.collision_rect(self.image, self.x, self.y)
-        object_rect = None
-        distance = 0
-        if object.direction == "right":
-            object_rect = object.collision_rect(object.image, object.x + move_speed, object.y)
-            distance = self_rect.left - object.x - object.width
-        elif object.direction == "left":
-            object_rect = object.collision_rect(object.image, object.x - move_speed, object.y)
-            distance = self_rect.right - object.x
-        elif object.direction == "up":
-            object_rect = object.collision_rect(object.image, object.x, object.y - move_speed)
-            distance = self_rect.bottom - object.y
-        elif object.direction == "down":
-            object_rect = object.collision_rect(object.image, object.x, object.y + move_speed)
-            distance = self_rect.top - object.y + object.height
+    def static_blocks_dynamic(self, dynamic_obj, reverse_direction=False, flip_img=False): # 정적인 객체가 동적인 객체를 막는 기능
+        dynamic_obj_rect = pg.Rect(dynamic_obj.x, dynamic_obj.y, dynamic_obj.width, dynamic_obj.height)
+        if self.rect.colliderect(dynamic_obj_rect):
+            if dynamic_obj.direction == "right":
+                dynamic_obj.x = self.rect.left - dynamic_obj.width
+                if flip_img:
+                    flip_image_direction(dynamic_obj, "left")
+                elif reverse_direction:
+                    dynamic_obj.direction = "left"
+            
+            elif dynamic_obj.direction == "left":
+                dynamic_obj.x = self.rect.right
+                if flip_img:
+                    flip_image_direction(dynamic_obj, "right")
+                elif reverse_direction:
+                    dynamic_obj.direction = "right"
+            
+            elif dynamic_obj.direction == "up":
+                dynamic_obj.y = self.rect.bottom
+                if reverse_direction:
+                    dynamic_obj.direction = "down"
+            
+            elif dynamic_obj.direction == "down":
+                dynamic_obj.y = self.rect.top - dynamic_obj.height
+                if reverse_direction:
+                    dynamic_obj.direction = "up"
 
-        if self_rect.colliderect(object_rect):
-            if object.direction == "right" or object.direction == "left":
-                object.x += distance
-            else:
-                object.y += distance
-
-    def push_object(self, object): # 충돌한 객체를 밀어내는 기능
-        self_rect = collision_rect(self.image, self.x, self.y)
-        object_rect = collision_rect(object.image, object.x, object.y)
-        if self_rect.colliderect(object_rect):
+    def dynamic_blocks_dynamic(self, dynamic_obj): # 동적인 객체가 동적인 객체를 막는 기능
+        if not self.rect:
+            self.rect = pg.Rect(self.x, self.y, self.width, self.height)
+        dynamic_obj_rect = pg.Rect(dynamic_obj.x, dynamic_obj.y, dynamic_obj.width, dynamic_obj.height)
+        if self.rect.colliderect(dynamic_obj_rect):
             if self.direction == "right":
-                object.x = self_rect.right # 오른쪽 접선에 배치
+                dynamic_obj.x = self.rect.right
+            
             elif self.direction == "left":
-                object.x = self_rect.left - object.width # 왼쪽 접선에 배치
+                dynamic_obj.x = self.rect.left - dynamic_obj.width
+            
+            elif self.direction == "up":
+                dynamic_obj.y = self.rect.top - dynamic_obj.height
+            
+            elif self.direction == "down":
+                dynamic_obj.y = self.rect.bottom
 
     def deal_damage(self): # 충돌한 객체에 데미지를 입히는 기능
         pass
 
     def bulk_up(self, layer, object, size): # 충돌한 객체의 크기와 중량을 커지게 하는 기능
-        object_rect = collision_rect(object.image, object.x, object.y)
-        self_rect = collision_rect(self.image, self.x, self.y)
-        if object_rect.colliderect(self_rect):
+        if not self.rect:
+            self.rect = pg.Rect(self.x, self.y, self.width, self.height)
+        object_rect = pg.Rect(object.x, object.y, object.width, object.height)
+        if object_rect.colliderect(self.rect):
             init_height = object.height
             change_image_size(object.normal_img, size, object)
             object.weight *= size
@@ -427,27 +493,15 @@ class Object:
 
     def bounce_up(self, object, power, count): # 충돌한 객체를 위로 튕겨내는 기능
         if not object.bouncing:
-            self_rect = collision_rect(self.image, self.x, self.y)
-            object_rect = collision_rect(object.image, object.x, object.y)
-            if self_rect.colliderect(object_rect):
-                if object_rect.bottom < self_rect.bottom:
+            if not self.rect:
+                self.rect = pg.Rect(self.x, self.y, self.width, self.height)
+            object_rect = pg.Rect(object.x, object.y, object.width, object.height)
+            if self.rect.colliderect(object_rect):
+                if object_rect.bottom < self.rect.bottom:
                     object.bouncing = True
                     self.bounce_power = power
                 else:
-                    distance_x = object_rect.centerx - self_rect.centerx # x좌표 차이
-                    distance_y = object_rect.centery - self_rect.centery # y좌표 차이
-                    if abs(distance_x) > abs(distance_y): # x좌표 차이가 y좌표 차이보다 클 경우
-                        tangent = None
-                        if distance_x > 0: # x좌표 차이가 양수이면
-                            tangent = self_rect.right # 접선
-                        else:
-                            tangent = self_rect.left - object_rect.width
-                        
-                        object.x = tangent
-
-            # if self_rect.colliderect(object_rect):
-            #     object.bouncing = True
-            #     self.bounce_power = power
+                    self.static_blocks_dynamic(dynamic_obj=object)
         
         if object.bouncing:
             if object.jumping:
@@ -489,13 +543,10 @@ def flip_image_direction(object, direction): # 전달받은 방향대로 객체�
 def read_coordinate(data_indices, row, col): # 그리드 배열에 전달받은 값을 인덱싱하여 해당 위치의 좌표를 반환
     return data_indices[1, row, col], data_indices[0, row, col]
 
-def collision_rect(img, x, y): # 전달받은 이미지와 좌표로 충돌 영역 정의(히트박스)
-    return pg.Rect(x, y, img.get_width(), img.get_height())
-
 def check_collision(object_layer, standard_rect, part): # 충돌 검사, 접선 반환
     for object in object_layer:
         # 레이어에 담긴 모든 오브젝트의 충돌 영역 리스트 생성
-        object_rect = collision_rect(object.image, object.x, object.y)
+        object_rect = pg.Rect(object.x, object.y, object.width, object.height)
         if standard_rect.colliderect(object_rect): # 플레이어가 오브젝트와 충돌했는지 확인
             if part == "bottom":
                 return object, object_rect.top # 오브젝트의 윗변의 y좌표와 오브젝트 반환
@@ -583,7 +634,7 @@ BG_PATH = ["winter", "daytime", "Snow"] # 고정할 배경 영상 폴더 경로(
 
 # 캐릭터 객체 추가
 NINJA_FROG = Player(image_path="img/player_2.png", direction="right",
-    move_speed=5, jump_power=25, weight=0.2) # 플레이어 객체 생성
+    move_speed=5, jump_power=50, weight=0.2) # 플레이어 객체 생성
 
 # 현재 플레이중인 캐릭터
 CURR_CHAR = NINJA_FROG
