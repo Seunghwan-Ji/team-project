@@ -250,10 +250,6 @@ class Map:
         # background_image = pg.image.load("img/Brown.png")
         # self.background_image = pg.transform.scale(background_image, (self.width, self.height))
 
-        # 이 맵의 플레이어 초기 위치
-        # pos_index = np.argwhere(self.data_arr == 9)[0]
-        # CURR_CHAR.x, CURR_CHAR.y = read_coordinate(self.data_indices, pos_index[0], pos_index[1])
-
         for i in np.argwhere(self.data_arr):
             row, col = i[0], i[1] # i: 요소의 행렬 인덱스를 담고 있다.(i[0]: 행 인덱스, i[1]: 열 인덱스)
             var = self.data_arr[row, col]
@@ -304,11 +300,12 @@ class Map:
                 name = "트램펄린"
             elif var == 9:
                 CURR_CHAR.x, CURR_CHAR.y = x, y # 이 맵의 플레이어 초기 위치
-            
-            object = Object(is_dynamic, image, x, y, type, direction, move_speed, name)
 
-            # 장애물, 몬스터, 아이템 등등 발판위에 배치하도록 하는 y값 저장
-            on_foothold_y = (y + image.get_height()) - (y + self.grid_height)
+            # 장애물, 몬스터, 아이템 등을 발판위에 배치하도록 하는 y값 저장
+            if image != foothold_image: # 발판 제외 y값 조정
+                y -= (y + image.get_height()) - (y + self.grid_height)
+
+            object = Object(is_dynamic, image, x, y, type, direction, move_speed, name)
 
             if is_dynamic:
                 self.dynamic_objects.append(object)
@@ -319,13 +316,10 @@ class Map:
                 type == "vertical_foothold"):
                 self.foothold_layer.append(object)
             elif type == "monster":
-                object.y -= on_foothold_y
                 self.monster_layer.append(object)
             elif type == "item":
-                object.y -= on_foothold_y
                 self.item_layer.append(object)
             elif type == "obstacle":
-                object.y -= on_foothold_y
                 self.obstacle_layer.append(object)
 
     # 정의한 맵의 기능 메서드 추가
@@ -333,10 +327,10 @@ class Map:
         # 발판 기능
         for foothold in self.foothold_layer:
             if foothold.type == "horizontal_foothold": # 수평적 발판
-                foothold.horizontal_motion(distance=3000, flip_img=False)
+                foothold.horizontal_motion(flip_img=False)
                 foothold.dynamic_blocks_dynamic(dynamic_obj=CURR_CHAR)
             elif foothold.type == "vertical_foothold": # 수직적 발판
-                foothold.vertical_motion(distance=3000)
+                foothold.vertical_motion()
                 foothold.dynamic_blocks_dynamic(dynamic_obj=CURR_CHAR)
         
         # 장애물 기능
@@ -347,20 +341,17 @@ class Map:
         # 몬스터 기능
         for monster in self.monster_layer:
             if monster.name == "요괴" or monster.name == "토끼":
-                monster.horizontal_motion(distance=1000)
+                monster.horizontal_motion()
         
         # 아이템 기능
         for item in self.item_layer:
             if item.name == "수박":
                 item.bulk_up(layer=self.item_layer, object=CURR_CHAR, size=3)
         
-        # 객체간 충돌 막기
+        # 정적, 동적 객체간 충돌 막기
         for static in self.static_objects:
             for dynamic in self.dynamic_objects:
-                if static.type == "몬스터":
-                    static.static_blocks_dynamic(dynamic_obj=dynamic, reverse_direction=True, flip_img=True)
-                else:
-                    static.static_blocks_dynamic(dynamic_obj=dynamic, reverse_direction=True)
+                static.static_blocks_dynamic(dynamic_obj=dynamic, reverse_direction=True, flip_img=True)
 
 class Object:
     def __init__(self, is_dynamic, image, x, y, type=None, direction=None, move_speed=None, name=None):
@@ -379,7 +370,6 @@ class Object:
         self.name = name # 이름
         self.bouncing = False # 바운스 상태
         self.bounce_count = 0 # 바운스 횟수
-        self.rect = None
 
         # 정적 객체만 충돌영역 설정
         if not self.is_dynamic:
@@ -389,7 +379,7 @@ class Object:
             self.rect = pg.Rect(self.x, self.y, self.width, self.height)
     
     # 오브젝트 기능 메서드 추가
-    def horizontal_motion(self, distance, flip_img=True): # 수평이동 기능
+    def horizontal_motion(self, distance=0, flip_img=True): # 수평이동 기능
         if self.direction == "right":
             if distance:
                 if self.x < self.init_x + distance:
@@ -417,21 +407,27 @@ class Object:
             else:
                 self.x -= self.move_speed
 
-    def vertical_motion(self, distance): # 수직이동 기능
+    def vertical_motion(self, distance=0): # 수직이동 기능
         if self.direction == "up":
-            if self.y > self.init_y - distance:
+            if distance:
+                if self.y > self.init_y - distance:
+                    self.y -= self.move_speed
+                else:
+                    self.init_y -= distance
+                    self.y = self.init_y
+                    self.direction = "down"
+            else:
                 self.y -= self.move_speed
-            else:
-                self.init_y -= distance
-                self.y = self.init_y
-                self.direction = "down"
         elif self.direction == "down":
-            if self.y < self.init_y + distance:
-                self.y += self.move_speed
+            if distance:
+                if self.y < self.init_y + distance:
+                    self.y += self.move_speed
+                else:
+                    self.init_y += distance
+                    self.y = self.init_y
+                    self.direction = "up"
             else:
-                self.init_y += distance
-                self.y = self.init_y
-                self.direction = "up"
+                self.y += self.move_speed
 
     def static_blocks_dynamic(self, dynamic_obj, reverse_direction=False, flip_img=False): # 정적인 객체가 동적인 객체를 막는 기능
         dynamic_obj_rect = pg.Rect(dynamic_obj.x, dynamic_obj.y, dynamic_obj.width, dynamic_obj.height)
@@ -461,8 +457,7 @@ class Object:
                     dynamic_obj.direction = "up"
 
     def dynamic_blocks_dynamic(self, dynamic_obj): # 동적인 객체가 동적인 객체를 막는 기능
-        if not self.rect:
-            self.rect = pg.Rect(self.x, self.y, self.width, self.height)
+        self.rect = pg.Rect(self.x, self.y, self.width, self.height)
         dynamic_obj_rect = pg.Rect(dynamic_obj.x, dynamic_obj.y, dynamic_obj.width, dynamic_obj.height)
         if self.rect.colliderect(dynamic_obj_rect):
             if self.direction == "right":
@@ -634,7 +629,7 @@ BG_PATH = ["winter", "daytime", "Snow"] # 고정할 배경 영상 폴더 경로(
 
 # 캐릭터 객체 추가
 NINJA_FROG = Player(image_path="img/player_2.png", direction="right",
-    move_speed=5, jump_power=50, weight=0.2) # 플레이어 객체 생성
+    move_speed=5, jump_power=25, weight=0.2) # 플레이어 객체 생성
 
 # 현재 플레이중인 캐릭터
 CURR_CHAR = NINJA_FROG
