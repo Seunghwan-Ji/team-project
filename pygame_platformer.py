@@ -33,6 +33,7 @@ class Player:
         self.bouncing = False # 바운스 상태
         self.bounce_count = 0 # 바운스 횟수
     
+    # 플레이어 기능 메서드 추가
     def move_right(self): # 우측 이동 기능
         player_rect = collision_rect(self.image, self.x + self.move_speed, self.y)
         object_left_tangent = check_collision(CURR_MAP.foothold_layer, player_rect, part="right")
@@ -58,17 +59,19 @@ class Player:
                 self.x -= self.move_speed # 이동속도 수치만큼 왼쪽으로 이동
             else:
                 self.x -= (self.x - object_right_tangent)
-
+        
         flip_image_direction(self, "left")
 
     def jump(self): # 점프 기능
         player_rect = collision_rect(self.image, self.x, self.y - self.jump_power)
         object_bottom_tangent = check_collision(CURR_MAP.foothold_layer, player_rect, part="top")
         if not object_bottom_tangent:
+            # print("점프중")
             self.y -= self.jump_power # 현재 점프력 수치만큼 플레이어를 위로 이동
             # 점프력 수치를 (중력+중량)만큼 감소(매 루프마다 뛰어오르는 속도가 서서히 감소)
             self.jump_power -= (CURR_MAP.gravity + self.weight)
         else:
+            # print("머리 부딪힘")
             self.y -= (self.y - object_bottom_tangent)
             self.jump_power = 0
         
@@ -83,9 +86,11 @@ class Player:
         player_rect = collision_rect(self.image, self.x, self.y + self.gravity_acc)
         collision = check_collision(CURR_MAP.foothold_layer, player_rect, part="bottom")
         if not collision:
+            # print("낙하중")
             self.y += self.gravity_acc # 현재 중력 가속도 수치만큼 플레이어를 아래로 이동
             self.on_foothold = False
         else:
+            # print("착지중")
             object, object_top_tangent = collision[0], collision[1]
             self.y += (object_top_tangent - self.y - self.height)
             self.on_foothold = True
@@ -120,7 +125,7 @@ class Player:
             self.pull_y = self.y - WINDOW_HEIGHT / 2 # y축을 당길 수치 = 깃발 위치로부터 플레이어 위치까지의 y좌표 차이
 
     # 캐릭터의 키 이벤트 처리 메서드 추가
-    def ninja_frog_key_event(self):
+    def ninja_frog_key_event(self): # ninja_frog 캐릭터의 이벤트 처리방식
         global RUN
         if self == NINJA_FROG:
             for event in pg.event.get(): # 파이게임의 이벤트들 참조
@@ -208,7 +213,11 @@ class Map:
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0) # 0번째 인덱스 프레임으로 이동
             self.ret, self.frame = self.cap.read() # 다시 읽기 시작
 
-    def draw_player(self): # 플레이어 이미지 그리기 기능
+    def draw_object(self): # 오브젝트 그리기 기능
+        for object in (self.foothold_layer + self.monster_layer + self.item_layer + self.obstacle_layer):
+            WINDOW.blit(object.image, (object.x - CURR_CHAR.pull_x, object.y - CURR_CHAR.pull_y))
+
+    def draw_player(self): # 플레이어 그리기 기능
         # 플레이어의 실제 위치를 (pull_x, pull_y)만큼 평행이동 시키고 플레이어 이미지 그리기
         WINDOW.blit(CURR_CHAR.image, (CURR_CHAR.x - CURR_CHAR.pull_x, CURR_CHAR.y - CURR_CHAR.pull_y))
 
@@ -262,7 +271,7 @@ class Map:
                 direction = "left"
                 move_speed = 3
             elif self.data_arr[row, col] == 5:
-                image = pg.image.load("img/Goblin.png")
+                image = change_image_size(pg.image.load("img/Goblin.png"), 1/3)
                 type = "monster"
                 direction = "left"
                 move_speed = 2
@@ -274,11 +283,11 @@ class Map:
                 move_speed = 3
                 name = "토끼"
             elif self.data_arr[row, col] == 7:
-                image = change_image_size(pg.image.load("img/Apple.png"), 2)
+                image = change_image_size(pg.image.load("img/Melon.png"), 4)
                 type = "item"
-                name = "사과"
+                name = "수박"
             elif self.data_arr[row, col] == 8:
-                image = change_image_size(pg.image.load("img/Trampoline.png"), 2)
+                image = change_image_size(pg.image.load("img/Trampoline.png"), 4)
                 type = "obstacle"
                 name = "트램펄린"
             
@@ -294,9 +303,9 @@ class Map:
                 y -= ((y + image.get_height()) - (y + self.grid_height))
                 self.obstacle_layer.append(Object(image, x, y, type, direction, move_speed, name))
 
-    # 정의한 맵을 그리는 메서드 추가
-    def draw_seoul_map(self): # 서울맵 그리기 기능
-        # 발판 레이어 그리기
+    # 정의한 맵의 기능 메서드 추가
+    def update_seoul(self): # 서울맵 기능
+        # 발판 기능
         for foothold in self.foothold_layer:
             if foothold.type == "horizontal_foothold": # 수평적 발판
                 foothold.horizontal_motion(distance=2000)
@@ -305,27 +314,21 @@ class Map:
             
             if foothold.type != "static_foothold":
                 foothold.push_object(CURR_CHAR)
-            
-            WINDOW.blit(foothold.image, (foothold.x - CURR_CHAR.pull_x, foothold.y - CURR_CHAR.pull_y))
         
-        # 몬스터 레이어 그리기
+        # 몬스터 기능
         for monster in self.monster_layer:
             if monster.name == "요괴" or monster.name == "토끼":
                 monster.horizontal_motion(distance=1000)
-            
-            WINDOW.blit(monster.image, (monster.x - CURR_CHAR.pull_x, monster.y - CURR_CHAR.pull_y))
         
-        # 아이템 레이어 그리기
+        # 아이템 기능
         for item in self.item_layer:
-            if item.name == "사과":
-                item.bulk_up(layer=self.item_layer, object=CURR_CHAR, size=2)
-                WINDOW.blit(item.image, (item.x - CURR_CHAR.pull_x, item.y - CURR_CHAR.pull_y))
+            if item.name == "수박":
+                item.bulk_up(layer=self.item_layer, object=CURR_CHAR, size=3)
         
-        # 장애물 레이어 그리기
+        # 장애물 기능
         for obstacle in self.obstacle_layer:
             if obstacle.name == "트램펄린":
-                obstacle.bounce(object=CURR_CHAR, direction="up", power=50, count=10)
-                WINDOW.blit(obstacle.image, (obstacle.x - CURR_CHAR.pull_x, obstacle.y - CURR_CHAR.pull_y))
+                obstacle.bounce_up(object=CURR_CHAR, power=30, count=20)
 
 class Object:
     def __init__(self, image, x, y, type=None, direction=None, move_speed=None, name=None):
@@ -344,7 +347,7 @@ class Object:
         self.bouncing = False # 바운스 상태
         self.bounce_count = 0 # 바운스 횟수
     
-    # 오브젝트 기능 추가
+    # 오브젝트 기능 메서드 추가
     def horizontal_motion(self, distance): # 수평이동 기능
         if self.direction == "right":
             if self.x < self.init_x + distance:
@@ -417,30 +420,44 @@ class Object:
         self_rect = collision_rect(self.image, self.x, self.y)
         if object_rect.colliderect(self_rect):
             init_height = object.height
-            change_image_size(object.image, size, object)
+            change_image_size(object.normal_img, size, object)
             object.weight *= size
-            object.y -= (object.height - init_height)
+            object.y -= (object.height - init_height) # 발판위에 재배치
             layer.remove(self)
 
-    def bounce(self, object, direction, power, count): # 충돌한 객체를 튕겨내는 기능
+    def bounce_up(self, object, power, count): # 충돌한 객체를 위로 튕겨내는 기능
         if not object.bouncing:
             self_rect = collision_rect(self.image, self.x, self.y)
             object_rect = collision_rect(object.image, object.x, object.y)
             if self_rect.colliderect(object_rect):
-                object.bouncing = True
+                if object_rect.bottom < self_rect.bottom:
+                    object.bouncing = True
+                    self.bounce_power = power
+                else:
+                    distance_x = object_rect.centerx - self_rect.centerx # x좌표 차이
+                    distance_y = object_rect.centery - self_rect.centery # y좌표 차이
+                    if abs(distance_x) > abs(distance_y): # x좌표 차이가 y좌표 차이보다 클 경우
+                        tangent = None
+                        if distance_x > 0: # x좌표 차이가 양수이면
+                            tangent = self_rect.right # 접선
+                        else:
+                            tangent = self_rect.left - object_rect.width
+                        
+                        object.x = tangent
+
+            # if self_rect.colliderect(object_rect):
+            #     object.bouncing = True
+            #     self.bounce_power = power
         
         if object.bouncing:
-            if direction == "up":
-                object.y -= power
-            elif direction == "right":
-                object.x += power
-            elif direction == "left":
-                object.x -= power
-            
+            if object.jumping:
+                object.jump_power = 0 # 점프상태이면 점프력을 0으로 초기화하고 더 뛰어오르지 못하게함
+            object.y -= (self.bounce_power + object.gravity_acc) # 중력 가속도만큼 내려간걸 다시 올려서 계산
+            self.bounce_power -= (CURR_MAP.gravity + object.weight)
             object.bounce_count += 1
-
             if object.bounce_count == count:
                 object.bounce_count = 0
+                object.gravity_acc = 0
                 object.bouncing = False
 
 # 함수
@@ -449,11 +466,25 @@ def change_image_size(image, size, object=None): # 이미지 사이즈 조절
     if object: # 객체를 전달하면 이미지 관련 속성을 모두 수정해줌
         object.normal_img = resized_img
         object.flip_img = pg.transform.flip(resized_img, True, False)
-        object.image = resized_img
         object.width = resized_img.get_width()
         object.height = resized_img.get_height()
+        # 현재 이미지 결정
+        if not object.flip:
+            object.image = object.normal_img
+        else:
+            object.image = object.flip_img
     else:
         return resized_img
+
+def flip_image_direction(object, direction): # 전달받은 방향대로 객체의 이미지를 반전시켜주는 함수
+    if object.direction != direction:
+        object.direction = direction # 방향 변경
+        if not object.flip:
+            object.image = object.flip_img # 반전된 이미지로 변경
+            object.flip = True # 반전 상태로 변경
+        else:
+            object.image = object.normal_img # 원래 이미지로
+            object.flip = False
 
 def read_coordinate(data_indices, row, col): # 그리드 배열에 전달받은 값을 인덱싱하여 해당 위치의 좌표를 반환
     return data_indices[1, row, col], data_indices[0, row, col]
@@ -475,23 +506,13 @@ def check_collision(object_layer, standard_rect, part): # 충돌 검사, 접선 
             elif part == "top":
                 return object_rect.bottom # 오브젝트의 밑변의 y좌표
 
-def request_draw_curr_map(map_name): # 현재 플레이중인 맵 그리기 요청
+def request_update_map(map_name): # 현재 플레이중인 맵 그리기 요청
     if map_name == "seoul":
-        CURR_MAP.draw_seoul_map()
+        CURR_MAP.update_seoul()
 
 def request_event_process(char): # 현재 플레이중인 캐릭터의 키 이벤트 처리 요청
     if char == NINJA_FROG:
         char.ninja_frog_key_event()
-
-def flip_image_direction(object, direction): # 전달받은 방향대로 이미지를 반전시켜주는 함수
-    if object.direction != direction:
-        object.direction = direction # 방향 변경
-        if not object.flip:
-            object.image = object.flip_img # 반전된 이미지로 변경
-            object.flip = True # 반전 상태로 변경
-        else:
-            object.image = object.normal_img # 원래 이미지로
-            object.flip = False
 
 def decide_season(month): # 현재 월에 대한 계절 반환
     if month >= 3 and month < 6:
@@ -562,13 +583,13 @@ BG_PATH = ["winter", "daytime", "Snow"] # 고정할 배경 영상 폴더 경로(
 
 # 캐릭터 객체 추가
 NINJA_FROG = Player(image_path="img/player_2.png", direction="right",
-    move_speed=5, jump_power=50, weight=0.4) # 플레이어 객체 생성
+    move_speed=5, jump_power=25, weight=0.2) # 플레이어 객체 생성
 
 # 현재 플레이중인 캐릭터
 CURR_CHAR = NINJA_FROG
 
 # 맵 객체 추가
-SEOUL = Map(map_data="seoul.txt", name="seoul") # 맵 객체 생성
+SEOUL = Map(map_data="seoul.txt", name="seoul") # 맵 객체 생성, name=지역이름
 
 # 현재 플레이중인 맵
 CURR_MAP = SEOUL
@@ -582,16 +603,21 @@ THREAD.start() # 스레드 시작
 while RUN:
     CLOCK.tick(FPS) # 초당 루프문을 수행하는 횟수(게임 진행속도)
     
-    # <현재 캐릭터의 키 이벤트 처리 요청>
+    # <현재 플레이어의 키 이벤트 처리 요청>
     request_event_process(CURR_CHAR)
 
-    # <현재 맵 상태 그리기>
-    CURR_CHAR.calc_dist_from_flag() # 추적 거리 계산
+    # 현재 맵 업데이트 요청
+    request_update_map(CURR_MAP.name)
+
+    # 플레이어 위치 추적
+    CURR_CHAR.calc_dist_from_flag()
+
+    # 그리기
     CURR_MAP.draw_background() # 배경
-    request_draw_curr_map(CURR_MAP.name) # 현재 맵의 모든 오브젝트 상태 그리기 요청
+    CURR_MAP.draw_object() # 오브젝트
     CURR_MAP.draw_player() # 플레이어
     
-    # 업데이트 사항 출력
+    # 출력
     pg.display.update()
 
 pg.quit() # 파이게임 종료
