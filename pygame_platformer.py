@@ -10,7 +10,7 @@ pg.init()
 
 # 객체를 생성하는 클래스 정의
 class Player:
-    def __init__(self, image_path, direction, move_speed, jump_power, weight):
+    def __init__(self, image_path, direction, move_speed, jump_power, weight, name):
         self.normal_img = change_image_size(pg.image.load(image_path), 2) # 이미지 로드
         self.flip_img = pg.transform.flip(self.normal_img, True, False) # 반전된 이미지
         self.flip = False # 반전 여부
@@ -22,6 +22,7 @@ class Player:
         self.weight = weight # 중량
         self.life_count = 5
 
+        self.name = name
         self.width = self.image.get_width() # 이미지 너비
         self.height = self.image.get_height() # 이미지 높이
         self.jump_power = self.init_jump_power # 현재 점프력
@@ -38,6 +39,12 @@ class Player:
         self.game_over = False
         self.bulk_up_time = False # 아이템 효과 쿨타임
         self.save_jump_power = self.init_jump_power
+        self.skill_effect = None # 스킬 오브젝트 저장
+
+        self.effect_layer = [] # 캐릭터의 이펙트 레이어
+
+        if self.name == "ninja_frog":
+            self.ninja_frog_skill_effect()
     
     # 플레이어 기능 메서드 추가
     def move_right(self): # 우측 이동 기능
@@ -113,12 +120,13 @@ class Player:
                 if object.dynamic_blocks_dynamic(dynamic_obj=self):
                     self.gravity_acc = 0
                     self.on_foothold = True
-                    if object.direction == "right":
-                        self.x += object.move_speed
-                    elif object.direction == "left":
-                        self.x -= object.move_speed
-                    elif object.direction == "up":
-                        self.y -= object.move_speed
+                    if self.init_jump_power == self.save_jump_power:
+                        if object.direction == "right":
+                            self.x += object.move_speed
+                        elif object.direction == "left":
+                            self.x -= object.move_speed
+                        elif object.direction == "up":
+                            self.y -= object.move_speed
                     break
                 else:
                     self_rect = pg.Rect(self.x, self.y, self.width, self.height)
@@ -147,6 +155,46 @@ class Player:
         elif (self.y >= WINDOW_HEIGHT / 2):
             self.pull_y = self.y - WINDOW_HEIGHT / 2 # y축을 당길 수치 = 깃발 위치로부터 플레이어 위치까지의 y좌표 차이
 
+    def attack(self):
+        if self.skill_effect not in self.effect_layer:
+            self.effect_layer.append(self.skill_effect)
+
+        if not self.skill_effect.move_count:
+            self.skill_effect.y = self.y + self.height/4
+            if self.image == self.normal_img:
+                self.skill_effect.x = self.x + self.width
+                self.skill_effect.direction = "right"
+            else:
+                self.skill_effect.x = self.x
+                self.skill_effect.direction = "left"
+        
+        if self.skill_effect.direction == "right":
+            self.skill_effect.x += self.skill_effect.move_speed
+            self.skill_effect.move_count += 1
+        elif self.skill_effect.direction == "left":
+            self.skill_effect.x -= self.skill_effect.move_speed
+            self.skill_effect.move_count += 1
+        
+        if self.skill_effect.move_count == 25:
+            self.skill_effect.move_count = 0
+            self.skill_effect.flying = False
+            self.effect_layer.remove(self.skill_effect)
+            return
+
+        for monster in CURR_MAP.monster_layer:
+            if self.skill_effect.deal_damage(object=monster, damage=2):
+                self.skill_effect.move_count = 0
+                self.skill_effect.flying = False
+                self.effect_layer.remove(self.skill_effect)
+                break
+
+    def ninja_frog_skill_effect(self):
+        image = change_image_size(pg.image.load("img/skill.png"), 4)
+        self.skill_effect = Object(is_dynamic=True, image=image, x=0, y=0, type="skill", move_speed=20, name="눈덩이")
+        self.skill_effect.flying = False
+
+        self.effect_layer.append(self.skill_effect)
+
     # 캐릭터의 키 이벤트 처리 메서드 추가
     def ninja_frog_key_event(self): # ninja_frog 캐릭터의 이벤트 처리방식
         global RUN
@@ -169,6 +217,8 @@ class Player:
         # 왼쪽 ALT키 or 스페이스바가 눌려있고, 플레이어가 점프중이 아니고, 발판 위에 있으면
         if (keys[pg.K_LALT] or keys[pg.K_SPACE]) and not self.jumping and self.on_foothold:
             self.jumping = True # 점프 기능 활성화
+        elif keys[pg.K_LCTRL] and not self.skill_effect.flying:
+            self.skill_effect.flying = True
         
         # <플레이어 이동>
         if self.jumping:
@@ -180,6 +230,10 @@ class Player:
             self.move_right() # 오른쪽
         elif self.key_left:
             self.move_left() # 왼쪽
+        
+        # 공격
+        if self.skill_effect.flying:
+            self.attack()
 
 class Map:
     def __init__(self, map_data, name):
@@ -238,7 +292,8 @@ class Map:
             self.ret, self.frame = self.cap.read() # 다시 읽기 시작
 
     def draw_object(self): # 오브젝트 그리기 기능
-        for object in (self.foothold_layer + self.obstacle_layer + self.monster_layer + self.item_layer):
+        for object in (self.foothold_layer + self.obstacle_layer +
+                       self.monster_layer + self.item_layer + CURR_CHAR.effect_layer):
             WINDOW.blit(object.image, (object.x - CURR_CHAR.pull_x, object.y - CURR_CHAR.pull_y))
 
     def draw_player(self): # 플레이어 그리기 기능
@@ -292,7 +347,7 @@ class Map:
                 is_dynamic = True
                 type = "horizontal_foothold"
                 direction = "right"
-                move_speed = 3
+                move_speed = 8
             
             elif var == 5:
                 is_dynamic = True
@@ -312,11 +367,11 @@ class Map:
             
             elif var == 8:
                 is_dynamic = True
-                image = change_image_size(pg.image.load("img/green_pig.png"), 1.3)
+                image = change_image_size(pg.image.load("img/honeybee.png"), 1.3)
                 type = "monster"
                 direction = "right"
                 move_speed = 3
-                name = "초록돼지"
+                name = "꿀벌"
             
             elif var == 9:
                 is_dynamic = True
@@ -419,6 +474,7 @@ class Object:
         self.life_count = 3
         self.deal_coolTime = int(time.time()) # 시간 기록(기능의 쿨타임)
         self.slow_down_coolTime = False
+        self.move_count = 0
 
         # 정적 객체만 충돌영역 설정
         if not self.is_dynamic:
@@ -529,21 +585,36 @@ class Object:
         
             return True
 
-    def deal_damage(self, object, coolTime): # 충돌한 객체에게 데미지를 입히는 기능
+    def deal_damage(self, object, damage=1, coolTime=False): # 충돌한 객체에게 데미지를 입히는 기능
         self.rect = pg.Rect(self.x, self.y, self.width, self.height)
         object_rect = pg.Rect(object.x, object.y, object.width, object.height)
         if object_rect.colliderect(self.rect):
-            curr_time = int(time.time())
-            if curr_time - self.deal_coolTime >= coolTime:
-                object.life_count -= 1
-                self.deal_coolTime = curr_time
-                # print(object.life_count)
+            if coolTime:
+                curr_time = int(time.time())
+                if curr_time - self.deal_coolTime >= coolTime:
+                    object.life_count -= damage
+                    self.deal_coolTime = curr_time
+                    # print(object.life_count)
 
-                if object.life_count == 0:
-                    if object != CURR_CHAR:
-                        CURR_MAP.monster_layer.remove(object)
-                    else:
-                        CURR_CHAR.game_over = True
+                    if object.life_count <= 0:
+                        if object != CURR_CHAR:
+                            CURR_MAP.monster_layer.remove(object)
+                            if object.slow_down_coolTime: # 캐릭터 둔화 풀어주기
+                                CURR_CHAR.move_speed = CURR_CHAR.init_move_speed
+                                CURR_CHAR.init_jump_power = CURR_CHAR.save_jump_power
+                                object.slow_down_coolTime = False
+                        else:
+                            CURR_CHAR.game_over = True
+            else:
+                object.life_count -= damage
+                if object.life_count <= 0:
+                    CURR_MAP.monster_layer.remove(object)
+                    if object.slow_down_coolTime:
+                        CURR_CHAR.move_speed = CURR_CHAR.init_move_speed
+                        CURR_CHAR.init_jump_power = CURR_CHAR.save_jump_power
+                        object.slow_down_coolTime = False
+            
+            return True
     
     def slow_down(self, object, move_speed, jump_power, coolTime):
         if self.slow_down_coolTime:
@@ -706,10 +777,10 @@ BG_PATH = ["winter", "daytime", "Snow"] # 고정할 배경 영상 폴더 경로(
 
 # 캐릭터 객체 추가
 PINK_MAN = Player(image_path="img/player_1.png", direction="right",
-    move_speed=5, jump_power=20, weight=0.4) # 플레이어 객체 생성
+    move_speed=5, jump_power=20, weight=0.4, name="pink_man") # 플레이어 객체 생성
 
 NINJA_FROG = Player(image_path="img/player_2.png", direction="right",
-    move_speed=7, jump_power=25, weight=0.2)
+    move_speed=7, jump_power=25, weight=0.2, name="ninja_frog")
 
 # 현재 플레이중인 캐릭터
 CURR_CHAR = NINJA_FROG
