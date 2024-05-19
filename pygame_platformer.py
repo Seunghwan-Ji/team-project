@@ -35,51 +35,50 @@ class Player:
     
     # 플레이어 기능 메서드 추가
     def move_right(self): # 우측 이동 기능
-        player_rect = pg.Rect(self.x + self.move_speed, self.y, self.width, self.height)
-        object_left_tangent = check_collision(CURR_MAP.foothold_layer, player_rect, part="right")
-        
-        # 플레이어가 우측으로 충돌중이 아니고, 맵 우측 끝부분 보다 안쪽에 있으면
         map_end_x = read_coordinate(CURR_MAP.data_indices, -1, -1)[0]
-        map_end_x += CURR_MAP.grid_width
-        if self.x < map_end_x:
-
-            # self.x += self.move_speed
-
-            if not object_left_tangent:
-                self.x += self.move_speed # 이동속도 수치만큼 오른쪽으로 이동
-            else:
-                self.x += (object_left_tangent - self.x - self.width)
+        map_end_x += (CURR_MAP.grid_width - self.width)
+        if self.x < map_end_x: # 맵 우측 끝 위치보다 안쪽에 있으면 이동 허용
+            self.x += self.move_speed # 이동속도 수치만큼 오른쪽으로 이동
         
         flip_image_direction(object=self, direction="right")
+
+        for object in CURR_MAP.foothold_layer:
+            if not object.is_dynamic:
+                if object.static_blocks_dynamic(dynamic_obj=self):
+                    break
+            else:
+                if object.dynamic_blocks_dynamic(dynamic_obj=self):
+                    break
     
     def move_left(self): # 좌측 이동 기능
-        player_rect = pg.Rect(self.x - self.move_speed, self.y, self.width, self.height)
-        object_right_tangent = check_collision(CURR_MAP.foothold_layer, player_rect, part="left")
-        
-        # 플레이어가 좌측으로 충돌중이 아니고, 맵 좌측 끝부분 보다 멀리 있으면
-        if self.x > 0:
-            
-            # self.x -= self.move_speed
-
-            if not object_right_tangent:
-                self.x -= self.move_speed # 이동속도 수치만큼 왼쪽으로 이동
-            else:
-                self.x -= (self.x - object_right_tangent)
+        if self.x > 0: # 맵 좌측 시작 위치보다 멀리있으면 이동 허용
+            self.x -= self.move_speed # 이동속도 수치만큼 왼쪽으로 이동
         
         flip_image_direction(object=self, direction="left")
+        
+        for object in CURR_MAP.foothold_layer:
+            if not object.is_dynamic:
+                if object.static_blocks_dynamic(dynamic_obj=self):
+                    break
+            else:
+                if object.dynamic_blocks_dynamic(dynamic_obj=self):
+                    break
 
     def jump(self): # 점프 기능
-        player_rect = pg.Rect(self.x, self.y - self.jump_power, self.width, self.height)
-        object_bottom_tangent = check_collision(CURR_MAP.foothold_layer, player_rect, part="top")
-        if not object_bottom_tangent:
-            # print("점프중")
-            self.y -= self.jump_power # 현재 점프력 수치만큼 플레이어를 위로 이동
-            # 점프력 수치를 (중력+중량)만큼 감소(매 루프마다 뛰어오르는 속도가 서서히 감소)
-            self.jump_power -= (CURR_MAP.gravity + self.weight)
-        else:
-            # print("머리 부딪힘")
-            self.y -= (self.y - object_bottom_tangent)
-            self.jump_power = 0
+        self.y -= self.jump_power # 현재 점프력 수치만큼 플레이어를 위로 이동
+        # 점프력 수치를 (중력+중량)만큼 감소(매 루프마다 뛰어오르는 속도가 서서히 감소)
+        self.jump_power -= (CURR_MAP.gravity + self.weight)
+        self.direction = "up"
+        
+        for object in CURR_MAP.foothold_layer:
+            if not object.is_dynamic:
+                if object.static_blocks_dynamic(dynamic_obj=self):
+                    self.jump_power = 0
+                    break
+            else:
+                if object.dynamic_blocks_dynamic(dynamic_obj=self):
+                    self.jump_power = 0
+                    break
         
         if self.jump_power <= 0: # 현재 점프력 수치가 0이하면
             self.jumping = False # 점프 기능 비활성화
@@ -89,26 +88,38 @@ class Player:
     def apply_gravity(self): # 중력 적용 기능
         # 중력 가속도 변수에 (중력+중량)을 축적(매 루프마다 아래로 떨어지는 속도가 서서히 증가)
         self.gravity_acc += (CURR_MAP.gravity + self.weight)
-        player_rect = pg.Rect(self.x, self.y + self.gravity_acc, self.width, self.height)
-        collision = check_collision(CURR_MAP.foothold_layer, player_rect, part="bottom")
-        if not collision:
-            # print("낙하중")
-            self.y += self.gravity_acc # 현재 중력 가속도 수치만큼 플레이어를 아래로 이동
-            self.on_foothold = False
-        else:
-            # print("착지중")
-            object, object_top_tangent = collision[0], collision[1]
-            self.y += (object_top_tangent - self.y - self.height)
-            self.on_foothold = True
-            self.gravity_acc = 0 # 중력 가속도 초기화
-            
-            # 동적인 오브젝트 위에 탑승 시 따라가기
-            if object.direction == "right":
-                self.x += object.move_speed
-            elif object.direction == "left":
-                self.x -= object.move_speed
-            elif object.direction == "up":
-                self.y -= object.move_speed
+        self.y += self.gravity_acc # 현재 중력 가속도 수치만큼 플레이어를 아래로 이동
+        self.direction = "down"
+
+        for object in CURR_MAP.foothold_layer:
+            if not object.is_dynamic:
+                if object.static_blocks_dynamic(dynamic_obj=self):
+                    self.gravity_acc = 0
+                    self.on_foothold = True
+                    break
+                else:
+                    self_rect = pg.Rect(self.x, self.y, self.width, self.height)
+                    if self_rect.bottom == object.rect.top:
+                        self.on_foothold = True # 접하기만 해도 true로 설정
+                    else:
+                        self.on_foothold = False
+            else:
+                if object.dynamic_blocks_dynamic(dynamic_obj=self):
+                    self.gravity_acc = 0
+                    self.on_foothold = True
+                    if object.direction == "right":
+                        self.x += object.move_speed
+                    elif object.direction == "left":
+                        self.x -= object.move_speed
+                    elif object.direction == "up":
+                        self.y -= object.move_speed
+                    break
+                else:
+                    self_rect = pg.Rect(self.x, self.y, self.width, self.height)
+                    if self_rect.bottom == object.rect.top:
+                        self.on_foothold = True # 접하기만 해도 true로 설정
+                    else:
+                        self.on_foothold = False
 
     def calc_dist_from_flag(self): # 플레이어 위치와 깃발 위치의 거리차 계산
         # 맵을 x축, y축으로 당길 수치(평행이동할 수치, 플레이어 위치를 기준으로 결정한다.)
@@ -133,37 +144,36 @@ class Player:
     # 캐릭터의 키 이벤트 처리 메서드 추가
     def ninja_frog_key_event(self): # ninja_frog 캐릭터의 이벤트 처리방식
         global RUN
-        if self == NINJA_FROG:
-            for event in pg.event.get(): # 파이게임의 이벤트들 참조
-                if event.type == pg.KEYDOWN: # 키보드 키가 눌린 상태일 때
-                    if event.key == pg.K_LEFT: # 왼쪽 방향키인 경우
-                        self.key_left = True # 왼쪽 이동 기능 활성화
-                    elif event.key == pg.K_RIGHT: # 오른쪽 방향키인 경우
-                        self.key_right = True # 오른쪽 이동 기능 활성화
-                elif event.type == pg.KEYUP: # 키보드 키를 뗀 상태일 때
-                    if event.key == pg.K_LEFT: # 왼쪽 방향키인 경우
-                        self.key_left = False # 왼쪽 이동 기능 비활성화
-                    elif event.key == pg.K_RIGHT: # 오른쪽 방향키인 경우
-                        self.key_right = False # 오른쪽 이동 기능 비활성화
-                elif event.type == pg.QUIT: # 창 닫기 버튼을 눌러 창을 닫았을 때
-                    RUN = False # 루프문 탈출
+        for event in pg.event.get(): # 파이게임의 이벤트들 참조
+            if event.type == pg.KEYDOWN: # 키보드 키가 눌린 상태일 때
+                if event.key == pg.K_LEFT: # 왼쪽 방향키인 경우
+                    self.key_left = True # 왼쪽 이동 기능 활성화
+                elif event.key == pg.K_RIGHT: # 오른쪽 방향키인 경우
+                    self.key_right = True # 오른쪽 이동 기능 활성화
+            elif event.type == pg.KEYUP: # 키보드 키를 뗀 상태일 때
+                if event.key == pg.K_LEFT: # 왼쪽 방향키인 경우
+                    self.key_left = False # 왼쪽 이동 기능 비활성화
+                elif event.key == pg.K_RIGHT: # 오른쪽 방향키인 경우
+                    self.key_right = False # 오른쪽 이동 기능 비활성화
+            elif event.type == pg.QUIT: # 창 닫기 버튼을 눌러 창을 닫았을 때
+                RUN = False # 루프문 탈출
 
-            keys = pg.key.get_pressed() # 키보드에서 눌린 키들
+        keys = pg.key.get_pressed() # 키보드에서 눌린 키들
 
-            # 왼쪽 ALT키 or 스페이스바가 눌려있고, 플레이어가 점프중이 아니고, 발판 위에 있으면
-            if (keys[pg.K_LALT] or keys[pg.K_SPACE]) and not self.jumping and self.on_foothold:
-                self.jumping = True # 점프 기능 활성화
-            
-            # <플레이어 이동>
-            if self.key_right:
-                self.move_right() # 오른쪽
-            elif self.key_left:
-                self.move_left() # 왼쪽
+        # 왼쪽 ALT키 or 스페이스바가 눌려있고, 플레이어가 점프중이 아니고, 발판 위에 있으면
+        if (keys[pg.K_LALT] or keys[pg.K_SPACE]) and not self.jumping and self.on_foothold:
+            self.jumping = True # 점프 기능 활성화
+        
+        # <플레이어 이동>
+        if self.key_right:
+            self.move_right() # 오른쪽
+        elif self.key_left:
+            self.move_left() # 왼쪽
 
-            if self.jumping:
-                self.jump() # 점프
-            else:
-                self.apply_gravity() # 중력
+        if self.jumping:
+            self.jump() # 점프
+        else:
+            self.apply_gravity() # 중력
 
 class Map:
     def __init__(self, map_data, name):
@@ -275,7 +285,7 @@ class Map:
                 direction = "up"
                 move_speed = 3
             elif var == 4:
-                type = "turning point"
+                type = "turning_point"
             elif var == 5:
                 is_dynamic = True
                 image = change_image_size(pg.image.load("img/Goblin.png"), 1/3)
@@ -300,6 +310,7 @@ class Map:
                 name = "트램펄린"
             elif var == 9:
                 CURR_CHAR.x, CURR_CHAR.y = x, y # 이 맵의 플레이어 초기 위치
+                continue
 
             # 장애물, 몬스터, 아이템 등을 발판위에 배치하도록 하는 y값 저장
             if image != foothold_image: # 발판 제외 y값 조정
@@ -328,10 +339,10 @@ class Map:
         for foothold in self.foothold_layer:
             if foothold.type == "horizontal_foothold": # 수평적 발판
                 foothold.horizontal_motion(flip_img=False)
-                foothold.dynamic_blocks_dynamic(dynamic_obj=CURR_CHAR)
+                # foothold.dynamic_blocks_dynamic(dynamic_obj=CURR_CHAR)
             elif foothold.type == "vertical_foothold": # 수직적 발판
                 foothold.vertical_motion()
-                foothold.dynamic_blocks_dynamic(dynamic_obj=CURR_CHAR)
+                # foothold.dynamic_blocks_dynamic(dynamic_obj=CURR_CHAR)
         
         # 장애물 기능
         for obstacle in self.obstacle_layer:
@@ -351,7 +362,10 @@ class Map:
         # 정적, 동적 객체간 충돌 막기
         for static in self.static_objects:
             for dynamic in self.dynamic_objects:
-                static.static_blocks_dynamic(dynamic_obj=dynamic, reverse_direction=True, flip_img=True)
+                if dynamic.type == "monster":
+                    static.static_blocks_dynamic(dynamic_obj=dynamic, reverse_direction=True, flip_img=True)
+                else:
+                    static.static_blocks_dynamic(dynamic_obj=dynamic, reverse_direction=True)
 
 class Object:
     def __init__(self, is_dynamic, image, x, y, type=None, direction=None, move_speed=None, name=None):
@@ -434,6 +448,7 @@ class Object:
         if self.rect.colliderect(dynamic_obj_rect):
             if dynamic_obj.direction == "right":
                 dynamic_obj.x = self.rect.left - dynamic_obj.width
+                
                 if flip_img:
                     flip_image_direction(dynamic_obj, "left")
                 elif reverse_direction:
@@ -441,6 +456,7 @@ class Object:
             
             elif dynamic_obj.direction == "left":
                 dynamic_obj.x = self.rect.right
+                
                 if flip_img:
                     flip_image_direction(dynamic_obj, "right")
                 elif reverse_direction:
@@ -448,29 +464,35 @@ class Object:
             
             elif dynamic_obj.direction == "up":
                 dynamic_obj.y = self.rect.bottom
+                
                 if reverse_direction:
                     dynamic_obj.direction = "down"
             
             elif dynamic_obj.direction == "down":
                 dynamic_obj.y = self.rect.top - dynamic_obj.height
+                
                 if reverse_direction:
                     dynamic_obj.direction = "up"
+
+            return True
 
     def dynamic_blocks_dynamic(self, dynamic_obj): # 동적인 객체가 동적인 객체를 막는 기능
         self.rect = pg.Rect(self.x, self.y, self.width, self.height)
         dynamic_obj_rect = pg.Rect(dynamic_obj.x, dynamic_obj.y, dynamic_obj.width, dynamic_obj.height)
         if self.rect.colliderect(dynamic_obj_rect):
-            if self.direction == "right":
-                dynamic_obj.x = self.rect.right
-            
-            elif self.direction == "left":
+            if dynamic_obj.direction == "right":
                 dynamic_obj.x = self.rect.left - dynamic_obj.width
             
-            elif self.direction == "up":
-                dynamic_obj.y = self.rect.top - dynamic_obj.height
+            elif dynamic_obj.direction == "left":
+                dynamic_obj.x = self.rect.right
             
-            elif self.direction == "down":
+            elif dynamic_obj.direction == "up":
                 dynamic_obj.y = self.rect.bottom
+            
+            elif dynamic_obj.direction == "down":
+                dynamic_obj.y = self.rect.top - dynamic_obj.height
+        
+            return True
 
     def deal_damage(self): # 충돌한 객체에 데미지를 입히는 기능
         pass
@@ -495,8 +517,8 @@ class Object:
                 if object_rect.bottom < self.rect.bottom:
                     object.bouncing = True
                     self.bounce_power = power
-                else:
-                    self.static_blocks_dynamic(dynamic_obj=object)
+                # else:
+                #     self.static_blocks_dynamic(dynamic_obj=object)
         
         if object.bouncing:
             if object.jumping:
@@ -528,29 +550,15 @@ def change_image_size(image, size, object=None): # 이미지 사이즈 조절
 def flip_image_direction(object, direction): # 전달받은 방향대로 객체의 이미지를 반전시켜주는 함수
     if object.direction != direction:
         object.direction = direction # 방향 변경
-        if not object.flip:
-            object.image = object.flip_img # 반전된 이미지로 변경
-            object.flip = True # 반전 상태로 변경
-        else:
-            object.image = object.normal_img # 원래 이미지로
+        if direction == "right":
+            object.image = object.normal_img
             object.flip = False
+        elif direction == "left":
+            object.image = object.flip_img
+            object.flip = True
 
 def read_coordinate(data_indices, row, col): # 그리드 배열에 전달받은 값을 인덱싱하여 해당 위치의 좌표를 반환
     return data_indices[1, row, col], data_indices[0, row, col]
-
-def check_collision(object_layer, standard_rect, part): # 충돌 검사, 접선 반환
-    for object in object_layer:
-        # 레이어에 담긴 모든 오브젝트의 충돌 영역 리스트 생성
-        object_rect = pg.Rect(object.x, object.y, object.width, object.height)
-        if standard_rect.colliderect(object_rect): # 플레이어가 오브젝트와 충돌했는지 확인
-            if part == "bottom":
-                return object, object_rect.top # 오브젝트의 윗변의 y좌표와 오브젝트 반환
-            elif part == "left":
-                return object_rect.right # 오브젝트의 높이(오른쪽)의 x좌표
-            elif part == "right":
-                return object_rect.left # 오브젝트의 높이(왼쪽)의 x좌표
-            elif part == "top":
-                return object_rect.bottom # 오브젝트의 밑변의 y좌표
 
 def request_update_map(map_name): # 현재 플레이중인 맵 그리기 요청
     if map_name == "seoul":
@@ -665,5 +673,7 @@ while RUN:
     
     # 출력
     pg.display.update()
+
+    # print(CURR_CHAR.direction)
 
 pg.quit() # 파이게임 종료
