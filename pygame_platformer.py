@@ -16,7 +16,8 @@ class Player:
         self.flip = False # 반전 여부
         self.image = self.normal_img # 현재 이미지
         self.direction = direction # 보고있는 방향
-        self.move_speed = move_speed # 이동속도
+        self.init_move_speed = move_speed
+        self.move_speed = self.init_move_speed # 이동속도
         self.init_jump_power = jump_power # 초기 점프력
         self.weight = weight # 중량
         self.life_count = 5
@@ -33,9 +34,10 @@ class Player:
         self.pull_x, self.pull_y = 0, 0 # 평행이동할 수치(x축, y축의 깃발과 떨어진 거리)
         self.bouncing = False # 바운스 상태
         self.bounce_count = 0 # 바운스 횟수
-        self.past_time = int(time.time()) # 시간 기록(기능의 쿨타임)
+        self.deal_coolTime = int(time.time()) # 시간 기록(기능의 쿨타임)
         self.game_over = False
-        self.bulk_up_time = False
+        self.bulk_up_time = False # 아이템 효과 쿨타임
+        self.save_jump_power = self.init_jump_power
     
     # 플레이어 기능 메서드 추가
     def move_right(self): # 우측 이동 기능
@@ -183,7 +185,7 @@ class Map:
     def __init__(self, map_data, name):
         # 텍스트 기반 맵 파일을 읽어와서 데이터를 리스트로 저장
         with open(map_data, 'r') as file:
-            data_list = [list(map(int, list(line.strip()))) for line in file] # 2중 리스트
+            data_list = [list(map(int, line.strip().split())) for line in file] # 2중 리스트
 
         # 데이터 리스트를 넘파이 배열로 변환
         self.data_arr = np.array(data_list) # 2차원 배열
@@ -246,7 +248,7 @@ class Map:
     # 맵을 정의하는 메서드 추가
     def seoul(self): # 서울맵 정의
         # 발판 이미지 로드
-        foothold_image = pg.image.load("img/foothold_2.png")
+        foothold_image = pg.image.load("img/foothold_1.png")
         foothold_image = change_image_size(foothold_image, 2)
 
         # 그리드 한 칸의 크기를 발판의 사이즈로 결정
@@ -277,44 +279,57 @@ class Map:
             name = None
 
             if var == 1:
-                type = "static_foothold"
+                type = "turning_point"
+
             elif var == 2:
+                type = "static_foothold"
+
+            elif var == 3:
+                CURR_CHAR.x, CURR_CHAR.y = x, y # 이 맵의 플레이어 초기 위치
+                continue
+            
+            elif var == 4:
                 is_dynamic = True
                 type = "horizontal_foothold"
                 direction = "right"
                 move_speed = 3
-            elif var == 3:
+            
+            elif var == 5:
                 is_dynamic = True
                 type = "vertical_foothold"
                 direction = "up"
                 move_speed = 3
-            elif var == 4:
-                type = "turning_point"
-            elif var == 5:
-                is_dynamic = True
-                image = change_image_size(pg.image.load("img/Goblin.png"), 1/3)
-                type = "monster"
-                direction = "right"
-                move_speed = 2
-                name = "요괴"
+            
             elif var == 6:
-                is_dynamic = True
-                image = pg.image.load("img/Rabbit.png")
-                type = "monster"
-                direction = "right"
-                move_speed = 3
-                name = "토끼"
-            elif var == 7:
-                image = change_image_size(pg.image.load("img/Melon.png"), 4)
-                type = "item"
-                name = "수박"
-            elif var == 8:
                 image = change_image_size(pg.image.load("img/Trampoline.png"), 4)
                 type = "obstacle"
                 name = "트램펄린"
+
+            elif var == 7:
+                image = change_image_size(pg.image.load("img/spike.png"), 2)
+                type = "obstacle"
+                name = "스파이크"
+            
+            elif var == 8:
+                is_dynamic = True
+                image = change_image_size(pg.image.load("img/green_pig.png"), 1.3)
+                type = "monster"
+                direction = "right"
+                move_speed = 3
+                name = "초록돼지"
+            
             elif var == 9:
-                CURR_CHAR.x, CURR_CHAR.y = x, y # 이 맵의 플레이어 초기 위치
-                continue
+                is_dynamic = True
+                image = change_image_size(pg.image.load("img/spike_mole.png"), 1.3)
+                type = "monster"
+                direction = "right"
+                move_speed = 2
+                name = "가시두더지"
+            
+            elif var == 10:
+                image = change_image_size(pg.image.load("img/Melon.png"), 4)
+                type = "item"
+                name = "수박"
 
             # 장애물, 몬스터, 아이템 등을 발판위에 배치하도록 하는 y값 저장
             if image != foothold_image: # 발판 제외 y값 조정
@@ -350,15 +365,18 @@ class Map:
         for obstacle in self.obstacle_layer:
             if obstacle.name == "트램펄린":
                 obstacle.bounce_up(object=CURR_CHAR, power=30, count=20)
+            elif obstacle.name == "스파이크":
+                obstacle.deal_damage(object=CURR_CHAR, coolTime=2)
+                obstacle.slow_down(object=CURR_CHAR, move_speed=3, jump_power=5, coolTime=5)
 
         # 몬스터 기능
         for monster in self.monster_layer:
-            if monster.name == "요괴" or monster.name == "토끼":
-                monster.horizontal_motion()
-                monster.deal_damage(object=CURR_CHAR)
-
-                if CURR_CHAR.bulk_up_time:
-                    monster.step_on(object=CURR_CHAR)
+            monster.horizontal_motion()
+            if CURR_CHAR.bulk_up_time:
+                monster.step_on(object=CURR_CHAR)
+            else:
+                monster.deal_damage(object=CURR_CHAR, coolTime=2)
+                monster.slow_down(object=CURR_CHAR, move_speed=3, jump_power=5, coolTime=2)
         
         # 아이템 기능
         for item in self.item_layer:
@@ -399,7 +417,8 @@ class Object:
         self.bouncing = False # 바운스 상태
         self.bounce_count = 0 # 바운스 횟수
         self.life_count = 3
-        self.past_time = int(time.time()) # 시간 기록(기능의 쿨타임)
+        self.deal_coolTime = int(time.time()) # 시간 기록(기능의 쿨타임)
+        self.slow_down_coolTime = False
 
         # 정적 객체만 충돌영역 설정
         if not self.is_dynamic:
@@ -510,14 +529,14 @@ class Object:
         
             return True
 
-    def deal_damage(self, object): # 충돌한 객체에게 데미지를 입히는 기능
+    def deal_damage(self, object, coolTime): # 충돌한 객체에게 데미지를 입히는 기능
         self.rect = pg.Rect(self.x, self.y, self.width, self.height)
         object_rect = pg.Rect(object.x, object.y, object.width, object.height)
         if object_rect.colliderect(self.rect):
             curr_time = int(time.time())
-            if curr_time - self.past_time >= 2:
+            if curr_time - self.deal_coolTime >= coolTime:
                 object.life_count -= 1
-                self.past_time = curr_time
+                self.deal_coolTime = curr_time
                 # print(object.life_count)
 
                 if object.life_count == 0:
@@ -525,6 +544,23 @@ class Object:
                         CURR_MAP.monster_layer.remove(object)
                     else:
                         CURR_CHAR.game_over = True
+    
+    def slow_down(self, object, move_speed, jump_power, coolTime):
+        if self.slow_down_coolTime:
+            curr_time = int(time.time())
+            if curr_time - self.slow_down_coolTime >= coolTime:
+                object.move_speed = object.init_move_speed
+                object.init_jump_power = object.save_jump_power
+                self.slow_down_coolTime = False
+        else:
+            self.rect = pg.Rect(self.x, self.y, self.width, self.height)
+            object_rect = pg.Rect(object.x, object.y, object.width, object.height)
+            if object_rect.colliderect(self.rect):
+                object.move_speed -= move_speed
+                object.init_jump_power -= jump_power
+                object.jump_power = object.init_jump_power
+                object.gravity_acc = 0
+                self.slow_down_coolTime = int(time.time())
 
     def bulk_up(self, layer, object, size): # 충돌한 객체의 크기와 중량을 커지게 하는 기능
         object_rect = pg.Rect(object.x, object.y, object.width, object.height)
@@ -669,8 +705,11 @@ FIX_BG = False # 배경 고정 모드
 BG_PATH = ["winter", "daytime", "Snow"] # 고정할 배경 영상 폴더 경로(각 폴더 이름만)
 
 # 캐릭터 객체 추가
+PINK_MAN = Player(image_path="img/player_1.png", direction="right",
+    move_speed=5, jump_power=20, weight=0.4) # 플레이어 객체 생성
+
 NINJA_FROG = Player(image_path="img/player_2.png", direction="right",
-    move_speed=5, jump_power=25, weight=0.2) # 플레이어 객체 생성
+    move_speed=7, jump_power=25, weight=0.2)
 
 # 현재 플레이중인 캐릭터
 CURR_CHAR = NINJA_FROG
@@ -706,7 +745,5 @@ while RUN:
     
     # 출력
     pg.display.update()
-
-    # print(CURR_CHAR.direction)
 
 pg.quit() # 파이게임 종료
