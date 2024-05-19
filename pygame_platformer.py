@@ -260,6 +260,8 @@ class Map:
         self.weather = BG_PATH[2] if FIX_BG else request_weather(self.name) # 지역의 날씨 저장
         self.cap = cv2.VideoCapture(f"video/{self.season}/{self.timeslot}/{self.weather}.mp4") # 영상 로드
         self.ret, self.frame = self.cap.read() # 프레임 읽기 시작
+        self.end = False # 맵 엔드지점 도착 여부
+        self.life_ui = change_image_size(pg.image.load("img/life.png"), 1/3)
 
         # 비슷한 유형의 오브젝트들끼리 나눠서 리스트에 저장
         self.static_objects = [] # 정적인 객체 모음
@@ -293,18 +295,32 @@ class Map:
 
     def draw_object(self): # 오브젝트 그리기 기능
         for object in (self.foothold_layer + self.obstacle_layer +
-                       self.monster_layer + self.item_layer + CURR_CHAR.effect_layer):
+            self.monster_layer + self.item_layer + CURR_CHAR.effect_layer):
             WINDOW.blit(object.image, (object.x - CURR_CHAR.pull_x, object.y - CURR_CHAR.pull_y))
 
     def draw_player(self): # 플레이어 그리기 기능
         # 플레이어의 실제 위치를 (pull_x, pull_y)만큼 평행이동 시키고 플레이어 이미지 그리기
         WINDOW.blit(CURR_CHAR.image, (CURR_CHAR.x - CURR_CHAR.pull_x, CURR_CHAR.y - CURR_CHAR.pull_y))
 
+    def draw_ui(self):
+        if CURR_CHAR.life_count:
+            for i in range(CURR_CHAR.life_count):
+                WINDOW.blit(self.life_ui, (i * self.life_ui.get_width(), 0))
+
+    def draw_lobby(self):
+        pass
+
+    def draw_ending(self):
+        pass
+
+    def draw_game_over(self):
+        pass
+
     # 맵을 정의하는 메서드 추가
     def seoul(self): # 서울맵 정의
         # 발판 이미지 로드
-        foothold_image = pg.image.load("img/foothold_1.png")
-        foothold_image = change_image_size(foothold_image, 2)
+        foothold_image = pg.image.load("img/tile.png")
+        # foothold_image = change_image_size(foothold_image, 2)
 
         # 그리드 한 칸의 크기를 발판의 사이즈로 결정
         self.grid_height, self.grid_width = foothold_image.get_height(), foothold_image.get_width()
@@ -385,6 +401,14 @@ class Map:
                 image = change_image_size(pg.image.load("img/Melon.png"), 4)
                 type = "item"
                 name = "수박"
+            
+            elif var == 11:
+                pass # 다른 캐릭터 객체로 변신하는 아이템 추가
+
+            elif var == 12:
+                image = change_image_size(pg.image.load("img/end_point.png"), 2)
+                type = "obstacle"
+                name = "엔드"
 
             # 장애물, 몬스터, 아이템 등을 발판위에 배치하도록 하는 y값 저장
             if image != foothold_image: # 발판 제외 y값 조정
@@ -423,6 +447,8 @@ class Map:
             elif obstacle.name == "스파이크":
                 obstacle.deal_damage(object=CURR_CHAR, coolTime=2)
                 obstacle.slow_down(object=CURR_CHAR, move_speed=3, jump_power=5, coolTime=5)
+            elif obstacle.name == "엔드":
+                pass
 
         # 몬스터 기능
         for monster in self.monster_layer:
@@ -671,6 +697,12 @@ class Object:
         if object_rect.colliderect(self.rect):
             if object_rect.bottom < self.rect.bottom:
                 CURR_MAP.monster_layer.remove(self)
+
+    def end_point(self, player):
+        player_rect = pg.Rect(player.x, player.y, player.width, player.height)
+        if player_rect.colliderect(self.rect):
+            CURR_MAP.end = True
+
 # 함수
 def change_image_size(image, size, object=None): # 이미지 사이즈 조절
     resized_img = pg.transform.scale(image, (image.get_width() * size, image.get_height() * size))
@@ -813,7 +845,18 @@ while RUN:
     CURR_MAP.draw_background() # 배경
     CURR_MAP.draw_object() # 오브젝트
     CURR_MAP.draw_player() # 플레이어
+    CURR_MAP.draw_ui() # UI
     
+    # 게임 오버 처리
+    if CURR_CHAR.game_over:
+        print("Game Over") # 임시
+        break
+
+    # 엔딩 처리
+    if CURR_MAP.end:
+        print("Thank you for playing the game") # 임시
+        break
+
     # 출력
     pg.display.update()
 
