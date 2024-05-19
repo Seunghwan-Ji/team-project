@@ -19,6 +19,7 @@ class Player:
         self.move_speed = move_speed # 이동속도
         self.init_jump_power = jump_power # 초기 점프력
         self.weight = weight # 중량
+        self.life_count = 5
 
         self.width = self.image.get_width() # 이미지 너비
         self.height = self.image.get_height() # 이미지 높이
@@ -32,6 +33,9 @@ class Player:
         self.pull_x, self.pull_y = 0, 0 # 평행이동할 수치(x축, y축의 깃발과 떨어진 거리)
         self.bouncing = False # 바운스 상태
         self.bounce_count = 0 # 바운스 횟수
+        self.past_time = int(time.time()) # 시간 기록(기능의 쿨타임)
+        self.game_over = False
+        self.bulk_up_time = False
     
     # 플레이어 기능 메서드 추가
     def move_right(self): # 우측 이동 기능
@@ -351,11 +355,23 @@ class Map:
         for monster in self.monster_layer:
             if monster.name == "요괴" or monster.name == "토끼":
                 monster.horizontal_motion()
+                monster.deal_damage(object=CURR_CHAR)
+
+                if CURR_CHAR.bulk_up_time:
+                    monster.step_on(object=CURR_CHAR)
         
         # 아이템 기능
         for item in self.item_layer:
             if item.name == "수박":
                 item.bulk_up(layer=self.item_layer, object=CURR_CHAR, size=3)
+        
+        # 아이템 효과 쿨타임 관리
+        if CURR_CHAR.bulk_up_time:
+            curr_time = int(time.time())
+            if curr_time - CURR_CHAR.bulk_up_time >= 5:
+                CURR_CHAR.weight *= (1/CURR_CHAR.init_size)
+                change_image_size(CURR_CHAR.normal_img, 1/CURR_CHAR.init_size, CURR_CHAR)
+                CURR_CHAR.bulk_up_time = False
         
         # 정적, 동적 객체간 충돌 막기
         for static in self.static_objects:
@@ -382,6 +398,8 @@ class Object:
         self.name = name # 이름
         self.bouncing = False # 바운스 상태
         self.bounce_count = 0 # 바운스 횟수
+        self.life_count = 3
+        self.past_time = int(time.time()) # 시간 기록(기능의 쿨타임)
 
         # 정적 객체만 충돌영역 설정
         if not self.is_dynamic:
@@ -492,24 +510,35 @@ class Object:
         
             return True
 
-    def deal_damage(self): # 충돌한 객체에 데미지를 입히는 기능
-        pass
-
-    def bulk_up(self, layer, object, size): # 충돌한 객체의 크기와 중량을 커지게 하는 기능
-        if not self.rect:
-            self.rect = pg.Rect(self.x, self.y, self.width, self.height)
+    def deal_damage(self, object): # 충돌한 객체에게 데미지를 입히는 기능
+        self.rect = pg.Rect(self.x, self.y, self.width, self.height)
         object_rect = pg.Rect(object.x, object.y, object.width, object.height)
         if object_rect.colliderect(self.rect):
+            curr_time = int(time.time())
+            if curr_time - self.past_time >= 2:
+                object.life_count -= 1
+                self.past_time = curr_time
+                # print(object.life_count)
+
+                if object.life_count == 0:
+                    if object != CURR_CHAR:
+                        CURR_MAP.monster_layer.remove(object)
+                    else:
+                        CURR_CHAR.game_over = True
+
+    def bulk_up(self, layer, object, size): # 충돌한 객체의 크기와 중량을 커지게 하는 기능
+        object_rect = pg.Rect(object.x, object.y, object.width, object.height)
+        if object_rect.colliderect(self.rect):
+            object.init_size = size
             init_height = object.height
             change_image_size(object.normal_img, size, object)
             object.weight *= size
             object.y -= (object.height - init_height) # 발판위에 재배치
+            object.bulk_up_time = int(time.time())
             layer.remove(self)
 
     def bounce_up(self, object, power, count): # 충돌한 객체를 위로 튕겨내는 기능
         if not object.bouncing:
-            if not self.rect:
-                self.rect = pg.Rect(self.x, self.y, self.width, self.height)
             object_rect = pg.Rect(object.x, object.y, object.width, object.height)
             if self.rect.colliderect(object_rect):
                 if object_rect.bottom < self.rect.bottom:
@@ -529,6 +558,12 @@ class Object:
                 object.gravity_acc = 0
                 object.bouncing = False
 
+    def step_on(self, object): # 위에서 충돌한 객체가 있다면 자신을 레이어에서 제거하는 기능
+        self.rect = pg.Rect(self.x, self.y, self.width, self.height)
+        object_rect = pg.Rect(object.x, object.y, object.width, object.height)
+        if object_rect.colliderect(self.rect):
+            if object_rect.bottom < self.rect.bottom:
+                CURR_MAP.monster_layer.remove(self)
 # 함수
 def change_image_size(image, size, object=None): # 이미지 사이즈 조절
     resized_img = pg.transform.scale(image, (image.get_width() * size, image.get_height() * size))
