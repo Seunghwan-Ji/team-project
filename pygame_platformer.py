@@ -165,15 +165,15 @@ class Player:
             self.jumping = True # 점프 기능 활성화
         
         # <플레이어 이동>
-        if self.key_right:
-            self.move_right() # 오른쪽
-        elif self.key_left:
-            self.move_left() # 왼쪽
-
         if self.jumping:
             self.jump() # 점프
         else:
             self.apply_gravity() # 중력
+        
+        if self.key_right:
+            self.move_right() # 오른쪽
+        elif self.key_left:
+            self.move_left() # 왼쪽
 
 class Map:
     def __init__(self, map_data, name):
@@ -290,14 +290,14 @@ class Map:
                 is_dynamic = True
                 image = change_image_size(pg.image.load("img/Goblin.png"), 1/3)
                 type = "monster"
-                direction = "left"
+                direction = "right"
                 move_speed = 2
                 name = "요괴"
             elif var == 6:
                 is_dynamic = True
                 image = pg.image.load("img/Rabbit.png")
                 type = "monster"
-                direction = "left"
+                direction = "right"
                 move_speed = 3
                 name = "토끼"
             elif var == 7:
@@ -339,10 +339,8 @@ class Map:
         for foothold in self.foothold_layer:
             if foothold.type == "horizontal_foothold": # 수평적 발판
                 foothold.horizontal_motion(flip_img=False)
-                # foothold.dynamic_blocks_dynamic(dynamic_obj=CURR_CHAR)
             elif foothold.type == "vertical_foothold": # 수직적 발판
                 foothold.vertical_motion()
-                # foothold.dynamic_blocks_dynamic(dynamic_obj=CURR_CHAR)
         
         # 장애물 기능
         for obstacle in self.obstacle_layer:
@@ -517,8 +515,8 @@ class Object:
                 if object_rect.bottom < self.rect.bottom:
                     object.bouncing = True
                     self.bounce_power = power
-                # else:
-                #     self.static_blocks_dynamic(dynamic_obj=object)
+                else:
+                    self.static_blocks_dynamic(dynamic_obj=object)
         
         if object.bouncing:
             if object.jumping:
