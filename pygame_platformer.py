@@ -847,14 +847,14 @@ while RUN:
     
     # 게임 오버 처리
     if CURR_CHAR.game_over:
-        print("Game Over") # 임시
-        # CURR_MAP.draw_game_over()
+        print("Game Over")
+        # CURR_MAP.draw_game_over() # 추가예정
         break
 
     # 엔딩 처리
     if CURR_MAP.end_point:
-        print("Thank you for playing the game") # 임시
-        # CURR_MAP.draw_ending()
+        print("Thank you for playing the game")
+        # CURR_MAP.draw_ending() # 추가예정
         break
 
     # 출력
