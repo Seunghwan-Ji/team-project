@@ -260,7 +260,7 @@ class Map:
         self.weather = BG_PATH[2] if FIX_BG else request_weather(self.name) # 지역의 날씨 저장
         self.cap = cv2.VideoCapture(f"video/{self.season}/{self.timeslot}/{self.weather}.mp4") # 영상 로드
         self.ret, self.frame = self.cap.read() # 프레임 읽기 시작
-        self.end = False # 맵 엔드지점 도착 여부
+        self.end_point = False # 맵 엔드지점 도착 여부
         self.life_ui = change_image_size(pg.image.load("img/life.png"), 1/3)
 
         # 비슷한 유형의 오브젝트들끼리 나눠서 리스트에 저장
@@ -448,7 +448,7 @@ class Map:
                 obstacle.deal_damage(object=CURR_CHAR, coolTime=2)
                 obstacle.slow_down(object=CURR_CHAR, move_speed=3, jump_power=5, coolTime=5)
             elif obstacle.name == "엔드":
-                pass
+                obstacle.check_end_point(player=CURR_CHAR)
 
         # 몬스터 기능
         for monster in self.monster_layer:
@@ -698,10 +698,10 @@ class Object:
             if object_rect.bottom < self.rect.bottom:
                 CURR_MAP.monster_layer.remove(self)
 
-    def end_point(self, player):
+    def check_end_point(self, player):
         player_rect = pg.Rect(player.x, player.y, player.width, player.height)
         if player_rect.colliderect(self.rect):
-            CURR_MAP.end = True
+            CURR_MAP.end_point = True
 
 # 함수
 def change_image_size(image, size, object=None): # 이미지 사이즈 조절
@@ -812,7 +812,7 @@ PINK_MAN = Player(image_path="img/player_1.png", direction="right",
     move_speed=5, jump_power=20, weight=0.4, name="pink_man") # 플레이어 객체 생성
 
 NINJA_FROG = Player(image_path="img/player_2.png", direction="right",
-    move_speed=7, jump_power=25, weight=0.2, name="ninja_frog")
+    move_speed=7, jump_power=50, weight=0.2, name="ninja_frog")
 
 # 현재 플레이중인 캐릭터
 CURR_CHAR = NINJA_FROG
@@ -850,11 +850,13 @@ while RUN:
     # 게임 오버 처리
     if CURR_CHAR.game_over:
         print("Game Over") # 임시
+        # CURR_MAP.draw_game_over()
         break
 
     # 엔딩 처리
-    if CURR_MAP.end:
+    if CURR_MAP.end_point:
         print("Thank you for playing the game") # 임시
+        # CURR_MAP.draw_ending()
         break
 
     # 출력
