@@ -33,8 +33,6 @@ class Player:
         self.key_left = False # 왼쪽 방향키 눌림 여부
         self.x, self.y = 0, 0 # 현재 위치
         self.pull_x, self.pull_y = 0, 0 # 평행이동할 수치(x축, y축의 깃발과 떨어진 거리)
-        self.bouncing = False # 바운스 상태
-        self.bounce_count = 0 # 바운스 횟수
         self.deal_coolTime = int(time.time()) # 시간 기록(기능의 쿨타임)
         self.game_over = False
         self.bulk_up_time = False # 아이템 효과 쿨타임
@@ -274,7 +272,7 @@ class Map:
         # 맵 이름마다 조건을 달아주고 맵을 정의하는 메서드 호출
         if self.name == "seoul":
             self.seoul()
-    
+
     def draw_background(self): # 배경 그리기 기능
         frame_rgb = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB) # 현재 프레임을 rgb형식으로 변환
         background_image = pg.image.frombuffer(frame_rgb.tobytes(), frame_rgb.shape[1::-1], "RGB") # rgb를 이미지로 변환
@@ -496,7 +494,6 @@ class Object:
         self.move_speed = move_speed # 이동속도
         self.name = name # 이름
         self.bouncing = False # 바운스 상태
-        self.bounce_count = 0 # 바운스 횟수
         self.life_count = 3
         self.deal_coolTime = int(time.time()) # 시간 기록(기능의 쿨타임)
         self.slow_down_coolTime = False
@@ -671,25 +668,26 @@ class Object:
             layer.remove(self)
 
     def bounce_up(self, object, power, count): # 충돌한 객체를 위로 튕겨내는 기능
-        if not object.bouncing:
-            object_rect = pg.Rect(object.x, object.y, object.width, object.height)
-            if self.rect.colliderect(object_rect):
-                if object_rect.bottom < self.rect.bottom:
-                    object.bouncing = True
-                    self.bounce_power = power
-                else:
-                    self.static_blocks_dynamic(dynamic_obj=object)
-        
-        if object.bouncing:
+        if self.bouncing:
             if object.jumping:
                 object.jump_power = 0 # 점프상태이면 점프력을 0으로 초기화하고 더 뛰어오르지 못하게함
             object.y -= (self.bounce_power + object.gravity_acc) # 중력 가속도만큼 내려간걸 다시 올려서 계산
             self.bounce_power -= (CURR_MAP.gravity + object.weight)
-            object.bounce_count += 1
-            if object.bounce_count == count:
-                object.bounce_count = 0
+            self.bounce_count += 1
+            if self.bounce_count == count:
+                self.bounce_count = 0
                 object.gravity_acc = 0
-                object.bouncing = False
+                self.bouncing = False
+        else:
+            object_rect = pg.Rect(object.x, object.y, object.width, object.height)
+            if self.rect.colliderect(object_rect):
+                if object_rect.bottom <= self.rect.bottom:
+                    object.y = self.rect.top - object.height
+                    self.bouncing = True
+                    self.bounce_count = 0
+                    self.bounce_power = power
+                else:
+                    self.static_blocks_dynamic(dynamic_obj=object)
 
     def step_on(self, object): # 위에서 충돌한 객체가 있다면 자신을 레이어에서 제거하는 기능
         self.rect = pg.Rect(self.x, self.y, self.width, self.height)
@@ -805,14 +803,14 @@ CLOCK = pg.time.Clock() # 게임 시간
 FPS = 60 # 초당 프레임
 RUN = True # 루프문 실행 여부
 FIX_BG = False # 배경 고정 모드
-BG_PATH = ["winter", "daytime", "Snow"] # 고정할 배경 영상 폴더 경로(각 폴더 이름만)
+BG_PATH = ["spring", "daytime", "Rain"] # 고정할 배경 영상 폴더 경로(각 폴더 이름만)
 
 # 캐릭터 객체 추가
 PINK_MAN = Player(image_path="img/player_1.png", direction="right",
     move_speed=5, jump_power=20, weight=0.4, name="pink_man") # 플레이어 객체 생성
 
 NINJA_FROG = Player(image_path="img/player_2.png", direction="right",
-    move_speed=7, jump_power=50, weight=0.2, name="ninja_frog")
+    move_speed=7, jump_power=25, weight=0.2, name="ninja_frog")
 
 # 현재 플레이중인 캐릭터
 CURR_CHAR = NINJA_FROG
