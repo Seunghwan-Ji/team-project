@@ -861,3 +861,4 @@ while RUN:
     pg.display.update()
 
 pg.quit() # 파이게임 종료
+# sxfgsdfhsdfdfghfg
