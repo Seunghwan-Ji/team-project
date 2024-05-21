@@ -36,7 +36,7 @@ class Player:
         self.deal_coolTime = int(time.time()) # 시간 기록(기능의 쿨타임)
         self.game_over = False
         self.bulk_up_time = False # 아이템 효과 쿨타임
-        self.save_jump_power = self.init_jump_power
+        self.save_jump_power = self.init_jump_power # 둔화 효과가 풀렸을때 사용하는 속성
         self.skill_effect = None # 스킬 오브젝트 저장
 
         self.effect_layer = [] # 캐릭터의 이펙트 레이어
@@ -77,8 +77,8 @@ class Player:
 
     def jump(self): # 점프 기능
         self.y -= self.jump_power # 현재 점프력 수치만큼 플레이어를 위로 이동
-        # 점프력 수치를 (중력+중량)만큼 감소(매 루프마다 뛰어오르는 속도가 서서히 감소)
-        self.jump_power -= (CURR_MAP.gravity + self.weight)
+        # 점프력 수치를 (중력+중량) // α 만큼 감소(매 루프마다 뛰어오르는 속도가 서서히 감소)
+        self.jump_power -= calc_gravity_acc(CURR_MAP.gravity, self.weight)
         self.direction = "up"
         
         for object in CURR_MAP.foothold_layer:
@@ -97,8 +97,8 @@ class Player:
             self.jump_power = self.init_jump_power # 점프력 수치 초기화
 
     def apply_gravity(self): # 중력 적용 기능
-        # 중력 가속도 변수에 (중력+중량)을 축적(매 루프마다 아래로 떨어지는 속도가 서서히 증가)
-        self.gravity_acc += (CURR_MAP.gravity + self.weight)
+        # 중력 가속도 변수에 (중력+중량) // α 을 축적(매 루프마다 아래로 떨어지는 속도가 서서히 증가)
+        self.gravity_acc += calc_gravity_acc(CURR_MAP.gravity, self.weight)
         self.y += self.gravity_acc # 현재 중력 가속도 수치만큼 플레이어를 아래로 이동
         self.direction = "down"
 
@@ -109,11 +109,7 @@ class Player:
                     self.on_foothold = True
                     break
                 else:
-                    self_rect = pg.Rect(self.x, self.y, self.width, self.height)
-                    if self_rect.bottom == object.rect.top:
-                        self.on_foothold = True # 접하기만 해도 true로 설정
-                    else:
-                        self.on_foothold = False
+                    self.on_foothold = False
             else:
                 if object.dynamic_blocks_dynamic(dynamic_obj=self):
                     self.gravity_acc = 0
@@ -127,11 +123,7 @@ class Player:
                             self.y -= object.move_speed
                     break
                 else:
-                    self_rect = pg.Rect(self.x, self.y, self.width, self.height)
-                    if self_rect.bottom == object.rect.top:
-                        self.on_foothold = True # 접하기만 해도 true로 설정
-                    else:
-                        self.on_foothold = False
+                    self.on_foothold = False
 
     def calc_dist_from_flag(self): # 플레이어 위치와 깃발 위치의 거리차 계산
         # 맵을 x축, y축으로 당길 수치(평행이동할 수치, 플레이어 위치를 기준으로 결정한다.)
@@ -300,7 +292,7 @@ class Map:
         # 플레이어의 실제 위치를 (pull_x, pull_y)만큼 평행이동 시키고 플레이어 이미지 그리기
         WINDOW.blit(CURR_CHAR.image, (CURR_CHAR.x - CURR_CHAR.pull_x, CURR_CHAR.y - CURR_CHAR.pull_y))
 
-    def draw_ui(self):
+    def draw_ui(self): # UI 그리기 기능
         if CURR_CHAR.life_count:
             for i in range(CURR_CHAR.life_count):
                 WINDOW.blit(self.life_ui, (i * self.life_ui.get_width(), 0))
@@ -441,7 +433,7 @@ class Map:
         # 장애물 기능
         for obstacle in self.obstacle_layer:
             if obstacle.name == "트램펄린":
-                obstacle.bounce_up(object=CURR_CHAR, power=30, count=20)
+                obstacle.bounce_up(object=CURR_CHAR, power=30)
             elif obstacle.name == "스파이크":
                 obstacle.deal_damage(object=CURR_CHAR, coolTime=2)
                 obstacle.slow_down(object=CURR_CHAR, move_speed=3, jump_power=5, coolTime=5)
@@ -460,14 +452,20 @@ class Map:
         # 아이템 기능
         for item in self.item_layer:
             if item.name == "수박":
-                item.bulk_up(layer=self.item_layer, object=CURR_CHAR, size=3)
+                item.bulk_up(layer=self.item_layer, object=CURR_CHAR, size=3, jump_power=30)
         
         # 아이템 효과 쿨타임 관리
         if CURR_CHAR.bulk_up_time:
             curr_time = int(time.time())
             if curr_time - CURR_CHAR.bulk_up_time >= 5:
-                CURR_CHAR.weight *= (1/CURR_CHAR.init_size)
-                change_image_size(CURR_CHAR.normal_img, 1/CURR_CHAR.init_size, CURR_CHAR)
+                CURR_CHAR.weight *= (1/CURR_CHAR.multiple_size)
+
+                if CURR_CHAR.jump_power == CURR_CHAR.init_jump_power:
+                    CURR_CHAR.jump_power = CURR_CHAR.save_jump_power
+                
+                CURR_CHAR.init_jump_power = CURR_CHAR.save_jump_power
+
+                change_image_size(CURR_CHAR.normal_img, 1/CURR_CHAR.multiple_size, CURR_CHAR)
                 CURR_CHAR.bulk_up_time = False
         
         # 정적, 동적 객체간 충돌 막기
@@ -584,6 +582,7 @@ class Object:
             
             elif dynamic_obj.direction == "down":
                 dynamic_obj.y = self.rect.top - dynamic_obj.height
+                # print(CURR_CHAR.y)
                 
                 if reverse_direction:
                     dynamic_obj.direction = "up"
@@ -656,26 +655,28 @@ class Object:
                 object.gravity_acc = 0
                 self.slow_down_coolTime = int(time.time())
 
-    def bulk_up(self, layer, object, size): # 충돌한 객체의 크기와 중량을 커지게 하는 기능
+    def bulk_up(self, layer, object, size, jump_power): # 충돌한 객체의 크기와 중량을 커지게 하는 기능
         object_rect = pg.Rect(object.x, object.y, object.width, object.height)
         if object_rect.colliderect(self.rect):
-            object.init_size = size
+            object.multiple_size = size
             init_height = object.height
             change_image_size(object.normal_img, size, object)
             object.weight *= size
+
+            if object.jump_power == object.init_jump_power:
+                object.jump_power = jump_power
+            
+            object.init_jump_power = jump_power
+
             object.y -= (object.height - init_height) # 발판위에 재배치
             object.bulk_up_time = int(time.time())
             layer.remove(self)
 
-    def bounce_up(self, object, power, count): # 충돌한 객체를 위로 튕겨내는 기능
+    def bounce_up(self, object, power): # 충돌한 객체를 위로 튕겨내는 기능
         if self.bouncing:
-            if object.jumping:
-                object.jump_power = 0 # 점프상태이면 점프력을 0으로 초기화하고 더 뛰어오르지 못하게함
             object.y -= (self.bounce_power + object.gravity_acc) # 중력 가속도만큼 내려간걸 다시 올려서 계산
-            self.bounce_power -= (CURR_MAP.gravity + object.weight)
-            self.bounce_count += 1
-            if self.bounce_count == count:
-                self.bounce_count = 0
+            self.bounce_power -= calc_gravity_acc(CURR_MAP.gravity, object.weight)
+            if self.bounce_power <= 0:
                 object.gravity_acc = 0
                 self.bouncing = False
         else:
@@ -684,8 +685,9 @@ class Object:
                 if object_rect.bottom <= self.rect.bottom:
                     object.y = self.rect.top - object.height
                     self.bouncing = True
-                    self.bounce_count = 0
                     self.bounce_power = power
+                    if object.jumping:
+                        object.jump_power = 0 # 점프상태이면 점프력을 0으로 초기화하고 더 뛰어오르지 못하게함
                 else:
                     self.static_blocks_dynamic(dynamic_obj=object)
 
@@ -702,6 +704,9 @@ class Object:
             CURR_MAP.end_point = True
 
 # 함수
+def calc_gravity_acc(map_gravity, object_weight): # 중력 가속 수치 결정 함수
+    return (map_gravity + object_weight) // 2
+
 def change_image_size(image, size, object=None): # 이미지 사이즈 조절
     resized_img = pg.transform.scale(image, (image.get_width() * size, image.get_height() * size))
     if object: # 객체를 전달하면 이미지 관련 속성을 모두 수정해줌
@@ -807,16 +812,16 @@ BG_PATH = ["spring", "daytime", "Rain"] # 고정할 배경 영상 폴더 경로(
 
 # 캐릭터 객체 추가
 PINK_MAN = Player(image_path="img/player_1.png", direction="right",
-    move_speed=5, jump_power=20, weight=0.4, name="pink_man") # 플레이어 객체 생성
+    move_speed=5, jump_power=20, weight=1, name="pink_man") # 플레이어 객체 생성
 
 NINJA_FROG = Player(image_path="img/player_2.png", direction="right",
-    move_speed=7, jump_power=25, weight=0.2, name="ninja_frog")
+    move_speed=7, jump_power=20, weight=1, name="ninja_frog")
 
 # 현재 플레이중인 캐릭터
 CURR_CHAR = NINJA_FROG
 
 # 맵 객체 추가
-SEOUL = Map(map_data="seoul.txt", name="seoul") # 맵 객체 생성, name=지역이름
+SEOUL = Map(map_data="seoul_integer.txt", name="seoul") # 맵 객체 생성, name=지역이름
 
 # 현재 플레이중인 맵
 CURR_MAP = SEOUL
