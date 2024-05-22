@@ -46,9 +46,8 @@ class Player:
     
     # 플레이어 기능 메서드 추가
     def move_right(self): # 우측 이동 기능
-        map_end_x = read_coordinate(CURR_MAP.data_indices, -1, -1)[0]
-        map_end_x += (CURR_MAP.grid_width - self.width)
-        if self.x < map_end_x: # 맵 우측 끝 위치보다 안쪽에 있으면 이동 허용
+        limit_x = CURR_MAP.width - self.width
+        if self.x < limit_x: # 맵 우측 끝 위치보다 안쪽에 있으면 이동 허용
             self.x += self.move_speed # 이동속도 수치만큼 오른쪽으로 이동
         
         flip_image_direction(object=self, direction="right")
@@ -129,19 +128,15 @@ class Player:
         # 맵을 x축, y축으로 당길 수치(평행이동할 수치, 플레이어 위치를 기준으로 결정한다.)
         # (0, 0) 위치로부터 x축 방향으로는 화면 가로 중간 너비만큼 떨어진 곳에 가상의 '깃발'이 있고,
         # y축 방향으로는 화면 세로 중간 높이만큼 떨어진 곳에 가상의 '깃발'이 있다고 가정
-        
-        map_end_x, map_end_y = read_coordinate(CURR_MAP.data_indices, -1, -1)
-        map_end_x += CURR_MAP.grid_width # 맵 그리드 배열 마지막 x좌표 + 그리드 한 칸
-        map_end_y += CURR_MAP.grid_height # 맵 그리드 배열 마지막 y좌표 + 그리드 한 칸
 
-        if self.x >= map_end_x - WINDOW_WIDTH / 2: # 플레이어 위치가 맵 오른쪽 끝에 다다를시
-            self.pull_x = map_end_x - WINDOW_WIDTH # 화면 가로 중간너비 만큼만 덜 당기는 수치
+        if self.x >= CURR_MAP.width - WINDOW_WIDTH / 2: # 플레이어 위치가 맵 오른쪽 끝에 다다를시
+            self.pull_x = CURR_MAP.width - WINDOW_WIDTH # 화면 가로 중간너비 만큼만 덜 당기는 수치
         elif self.x >= WINDOW_WIDTH / 2: # 플레이어 위치가 깃발 위치보다 멀리있거나 같으면
             self.pull_x = self.x - WINDOW_WIDTH / 2 # x축을 당길 수치 = 깃발 위치로부터 플레이어 위치까지의 x좌표 차이
         
-        if self.y >= map_end_y - WINDOW_HEIGHT / 2: # 플레이어 위치가 맵 아래쪽 끝에 다다를시
-            self.pull_y = map_end_y - WINDOW_HEIGHT # 화면 세로 중간높이 만큼만 덜 당기는 수치
-        # elif (self.y >= WINDOW_HEIGHT / 2) or (self.y <= WINDOW_HEIGHT / 2):
+        if self.y >= CURR_MAP.height - WINDOW_HEIGHT / 2: # 플레이어 위치가 맵 아래쪽 끝에 다다를시
+            self.pull_y = CURR_MAP.height - WINDOW_HEIGHT # 화면 세로 중간높이 만큼만 덜 당기는 수치
+        # elif (self.y >= WINDOW_HEIGHT / 2) or (self.y <= WINDOW_HEIGHT / 2): # 플레이어 y좌표가 깃발 y좌표보다 작을때 추적을 허용할지 조건
         elif (self.y >= WINDOW_HEIGHT / 2):
             self.pull_y = self.y - WINDOW_HEIGHT / 2 # y축을 당길 수치 = 깃발 위치로부터 플레이어 위치까지의 y좌표 차이
 
@@ -229,7 +224,7 @@ class Map:
     def __init__(self, map_data, name):
         # 텍스트 기반 맵 파일을 읽어와서 데이터를 리스트로 저장
         with open(map_data, 'r') as file:
-            data_list = [list(map(int, line.strip().split())) for line in file] # 2중 리스트
+            data_list = [line.strip().split() for line in file] # 2중 리스트
 
         # 데이터 리스트를 넘파이 배열로 변환
         self.data_arr = np.array(data_list) # 2차원 배열
@@ -238,18 +233,22 @@ class Map:
         self.name = name
         self.data_indices = np.indices((len(self.data_arr), len(self.data_arr[0]))) # 데이터 인덱스 배열 생성(행 배열, 열 배열)
         self.grid_width, self.grid_height = 1, 1 # 그리드 한 칸의 사이즈
+        self.coordinate_list = [] # 좌표 리스트
         self.width, self.height = None, None # 맵의 전체 너비, 높이
         self.gravity = 1 # 중력
         self.background_image = None # 배경 이미지
         self.bg_x, self.bg_y = 0, 0 # 배경 이미지 위치
         self.init_player_pos = 0, 0 # 플레이어 스폰 위치
-        self.month = datetime.datetime.now().month # 현재 월 저장
-        self.season = BG_PATH[0] if FIX_BG else decide_season(self.month) # 현재 월의 계절 저장
-        self.hour = datetime.datetime.now().hour # 현재 시각 저장
-        self.timeslot = BG_PATH[1] if FIX_BG else decide_timeslot(self.hour) # 현재 시각의 시간대 저장
-        self.weather = BG_PATH[2] if FIX_BG else request_weather(self.name) # 지역의 날씨 저장
-        self.cap = cv2.VideoCapture(f"video/{self.season}/{self.timeslot}/{self.weather}.mp4") # 영상 로드
-        self.ret, self.frame = self.cap.read() # 프레임 읽기 시작
+
+        if not TILE_BG:
+            self.month = datetime.datetime.now().month # 현재 월 저장
+            self.season = BG_PATH[0] if FIX_BG else decide_season(self.month) # 현재 월의 계절 저장
+            self.hour = datetime.datetime.now().hour # 현재 시각 저장
+            self.timeslot = BG_PATH[1] if FIX_BG else decide_timeslot(self.hour) # 현재 시각의 시간대 저장
+            self.weather = BG_PATH[2] if FIX_BG else request_weather(self.name) # 지역의 날씨 저장
+            self.cap = cv2.VideoCapture(f"video/{self.season}/{self.timeslot}/{self.weather}.mp4") # 영상 로드
+            self.ret, self.frame = self.cap.read() # 프레임 읽기 시작
+        
         self.end_point = False # 맵 엔드지점 도착 여부
         self.life_ui = change_image_size(pg.image.load("img/life.png"), 1/3)
 
@@ -265,7 +264,29 @@ class Map:
         if self.name == "seoul":
             self.seoul()
 
+    # 그리드 배열에 인덱싱하여 해당 위치의 값을 좌표로 반환
+    def read_coordinate(self, row_idx, col_idx):
+        return self.data_indices[1, row_idx, col_idx], self.data_indices[0, row_idx, col_idx]
+
     def draw_background(self): # 배경 그리기 기능
+        frame_rgb = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB) # 현재 프레임을 rgb형식으로 변환
+        background_image = pg.image.frombuffer(frame_rgb.tobytes(), frame_rgb.shape[1::-1], "RGB") # rgb를 이미지로 변환
+        
+        # 이미지를 출력화면의 전체 너비, 높이 속성만큼 사이즈 조절
+        self.background_image = pg.transform.scale(background_image, (WINDOW_WIDTH, WINDOW_HEIGHT))
+
+        # 이미지 그리기
+        WINDOW.blit(self.background_image, (0, 0))
+
+        self.ret, self.frame = self.cap.read() # 다음 프레임 읽기
+        if not self.ret: # 모든 프레임이 끝나서 읽어지지 않는다면
+            if not FIX_BG: # 배경 고정 모드가 아니면
+                # 프레임 끝날때마다 속성값 참조하여 영상 업데이트
+                self.cap = cv2.VideoCapture(f"video/{self.season}/{self.timeslot}/{self.weather}.mp4")
+            self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0) # 0번째 인덱스 프레임으로 이동
+            self.ret, self.frame = self.cap.read() # 다시 읽기 시작
+
+    def draw_background_expend(self): # 맵 크기만큼 배경 늘려서 그리기 기능
         frame_rgb = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB) # 현재 프레임을 rgb형식으로 변환
         background_image = pg.image.frombuffer(frame_rgb.tobytes(), frame_rgb.shape[1::-1], "RGB") # rgb를 이미지로 변환
         
@@ -282,6 +303,18 @@ class Map:
                 self.cap = cv2.VideoCapture(f"video/{self.season}/{self.timeslot}/{self.weather}.mp4")
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0) # 0번째 인덱스 프레임으로 이동
             self.ret, self.frame = self.cap.read() # 다시 읽기 시작
+
+    def draw_background_tile(self): # 배경을 타일 이미지로 출력화면 만큼 채워서 그리기 기능
+        arrX = np.arange(0, WINDOW_WIDTH, self.grid_width)
+        arrY = np.arange(0, WINDOW_HEIGHT, self.grid_height)
+        grid_arrX, grid_arrY = np.meshgrid(arrX, arrY, indexing='xy') # indexing='xy': 행렬을 좌표 형식으로 바꿔줌 (y, x) -> (x, y)
+        
+        for x, y in zip(grid_arrX.ravel(), grid_arrY.ravel()): # ravel(): 다차원 배열을 1차원 배열로 평탄화
+            WINDOW.blit(self.background_image, (x, y))
+
+    def draw_background_tile_expend(self): # 배경을 타일 이미지로 맵 크기 만큼 채워서 그리기 기능
+        for x, y in self.coordinate_list:
+            WINDOW.blit(self.background_image, (x - CURR_CHAR.pull_x, y - CURR_CHAR.pull_y))
 
     def draw_object(self): # 오브젝트 그리기 기능
         for object in (self.foothold_layer + self.obstacle_layer +
@@ -309,8 +342,11 @@ class Map:
     # 맵을 정의하는 메서드 추가
     def seoul(self): # 서울맵 정의
         # 발판 이미지 로드
-        foothold_image = pg.image.load("img/tile.png")
-        # foothold_image = change_image_size(foothold_image, 2)
+        if TILE_BG:
+            foothold_image = change_image_size(pg.image.load("img/foothold_2.png"), 2)
+            self.background_image = change_image_size(pg.image.load("img/Brown.png"), 2)
+        else:
+            foothold_image = pg.image.load("img/tile.png")
 
         # 그리드 한 칸의 크기를 발판의 사이즈로 결정
         self.grid_height, self.grid_width = foothold_image.get_height(), foothold_image.get_width()
@@ -320,17 +356,14 @@ class Map:
         self.data_indices[1] *= self.grid_width
 
         # 맵의 전체 너비, 높이 계산
-        end_x, end_y = read_coordinate(self.data_indices, -1, -1) # 데이터 인덱스 배열에서 마지막 행, 마지막 열의 좌표
+        end_x, end_y = self.read_coordinate(-1, -1) # 데이터 인덱스 배열에서 마지막 행, 마지막 열의 좌표
         self.width, self.height = end_x + self.grid_width, end_y + self.grid_height # 가로 세로 각각 그리드 한 칸 만큼 더 늘려서 적용(1픽셀 확장)
         
-        # 배경 이미지 로드
-        # background_image = pg.image.load("img/Brown.png")
-        # self.background_image = pg.transform.scale(background_image, (self.width, self.height))
-
         for i in np.argwhere(self.data_arr):
-            row, col = i[0], i[1] # i: 요소의 행렬 인덱스를 담고 있다.(i[0]: 행 인덱스, i[1]: 열 인덱스)
-            var = self.data_arr[row, col]
-            x, y = read_coordinate(self.data_indices, row, col) # 오브젝트를 배치할 좌표
+            row_idx, col_idx = i[0], i[1] # i: 요소의 행렬 인덱스를 담고 있다.(i[0]: 행 인덱스, i[1]: 열 인덱스)
+            var = self.data_arr[row_idx, col_idx]
+            x, y = self.read_coordinate(row_idx, col_idx) # 오브젝트를 배치할 좌표
+            self.coordinate_list.append((x, y))
             
             image = foothold_image
             is_dynamic = False
@@ -339,39 +372,39 @@ class Map:
             move_speed = None
             name = None
 
-            if var == 1:
-                type = "turning_point"
+            if var == "/":
+                    type = "turning_point"
 
-            elif var == 2:
-                type = "static_foothold"
-
-            elif var == 3:
+            elif var == "!":
                 CURR_CHAR.x, CURR_CHAR.y = x, y # 이 맵의 플레이어 초기 위치
                 continue
+
+            elif var == "#":
+                type = "static_foothold"
             
-            elif var == 4:
+            elif var == "A":
                 is_dynamic = True
                 type = "horizontal_foothold"
                 direction = "right"
                 move_speed = 8
             
-            elif var == 5:
+            elif var == "B":
                 is_dynamic = True
                 type = "vertical_foothold"
                 direction = "up"
                 move_speed = 3
             
-            elif var == 6:
+            elif var == "C":
                 image = change_image_size(pg.image.load("img/Trampoline.png"), 4)
                 type = "obstacle"
                 name = "트램펄린"
 
-            elif var == 7:
+            elif var == "D":
                 image = change_image_size(pg.image.load("img/spike.png"), 2)
                 type = "obstacle"
                 name = "스파이크"
             
-            elif var == 8:
+            elif var == "E":
                 is_dynamic = True
                 image = change_image_size(pg.image.load("img/honeybee.png"), 1.3)
                 type = "monster"
@@ -379,7 +412,7 @@ class Map:
                 move_speed = 3
                 name = "꿀벌"
             
-            elif var == 9:
+            elif var == "F":
                 is_dynamic = True
                 image = change_image_size(pg.image.load("img/spike_mole.png"), 1.3)
                 type = "monster"
@@ -387,20 +420,23 @@ class Map:
                 move_speed = 2
                 name = "가시두더지"
             
-            elif var == 10:
+            elif var == "G":
                 image = change_image_size(pg.image.load("img/Melon.png"), 4)
                 type = "item"
                 name = "수박"
             
-            elif var == 11:
+            elif var == "H":
                 pass # 다른 캐릭터 객체로 변신하는 아이템 추가
 
-            elif var == 12:
+            elif var == "I":
                 image = change_image_size(pg.image.load("img/end_point.png"), 2)
                 type = "obstacle"
                 name = "엔드"
+            
+            else:
+                continue # 위에 해당되는 값이 없으면 컨티뉴 처리해서 객체 생성을 못하게함.
 
-            # 장애물, 몬스터, 아이템 등을 발판위에 배치하도록 하는 y값 저장
+            # 장애물, 몬스터, 아이템 등을 발판위에 배치하도록 하는 y값 조정
             if image != foothold_image: # 발판 제외 y값 조정
                 y -= (y + image.get_height()) - (y + self.grid_height)
 
@@ -436,7 +472,7 @@ class Map:
                 obstacle.bounce_up(object=CURR_CHAR, power=30)
             elif obstacle.name == "스파이크":
                 obstacle.deal_damage(object=CURR_CHAR, coolTime=2)
-                obstacle.slow_down(object=CURR_CHAR, move_speed=3, jump_power=5, coolTime=5)
+                obstacle.slow_down(object=CURR_CHAR, move_speed=3, jump_power=5, coolTime=3)
             elif obstacle.name == "엔드":
                 obstacle.check_end_point(player=CURR_CHAR)
 
@@ -582,7 +618,6 @@ class Object:
             
             elif dynamic_obj.direction == "down":
                 dynamic_obj.y = self.rect.top - dynamic_obj.height
-                # print(CURR_CHAR.y)
                 
                 if reverse_direction:
                     dynamic_obj.direction = "up"
@@ -616,7 +651,6 @@ class Object:
                 if curr_time - self.deal_coolTime >= coolTime:
                     object.life_count -= damage
                     self.deal_coolTime = curr_time
-                    # print(object.life_count)
 
                     if object.life_count <= 0:
                         if object != CURR_CHAR:
@@ -689,6 +723,9 @@ class Object:
                     if object.jumping:
                         object.jump_power = 0 # 점프상태이면 점프력을 0으로 초기화하고 더 뛰어오르지 못하게함
                 else:
+                    if object.jumping:
+                        object.jump_power = 0
+                    
                     self.static_blocks_dynamic(dynamic_obj=object)
 
     def step_on(self, object): # 위에서 충돌한 객체가 있다면 자신을 레이어에서 제거하는 기능
@@ -706,6 +743,13 @@ class Object:
 # 함수
 def calc_gravity_acc(map_gravity, object_weight): # 중력 가속 수치 결정 함수
     return (map_gravity + object_weight) // 2
+
+    # 중력값과 중량값이 소수일 때, 매 루프마다 중력 가속도에 축적되는 값이 다르게 나타난다.
+    # 이유는 부동 소수점 연산의 특성 때문이다. 컴퓨터는 부동 소수점을 정확하게 표현하는 데 한계가 있으며,
+    # 이로 인해 작은 오차가 발생할 수 있다. 이러한 오차는 반복적으로 축적되면 점점 더 커질 수 있다.
+    # 예를 들어, 0.1 + 0.2의 결과가 0.30000000000000004가 되는 것처럼, 소수점 연산에서는
+    # 항상 정확한 값을 얻기 어렵다. 이는 부동 소수점의 정밀도 문제로 인해 발생한다.
+    # 그러므로 되도록 중력과 중량을 정수로 설정하고, 정수끼리의 연산을 채택한다.
 
 def change_image_size(image, size, object=None): # 이미지 사이즈 조절
     resized_img = pg.transform.scale(image, (image.get_width() * size, image.get_height() * size))
@@ -731,9 +775,6 @@ def flip_image_direction(object, direction): # 전달받은 방향대로 객체�
         elif direction == "left":
             object.image = object.flip_img
             object.flip = True
-
-def read_coordinate(data_indices, row, col): # 그리드 배열에 전달받은 값을 인덱싱하여 해당 위치의 좌표를 반환
-    return data_indices[1, row, col], data_indices[0, row, col]
 
 def request_update_map(map_name): # 현재 플레이중인 맵 그리기 요청
     if map_name == "seoul":
@@ -807,8 +848,9 @@ pg.display.set_caption("Platformer Game") # 창 상단바 제목
 CLOCK = pg.time.Clock() # 게임 시간
 FPS = 60 # 초당 프레임
 RUN = True # 루프문 실행 여부
-FIX_BG = False # 배경 고정 모드
-BG_PATH = ["spring", "daytime", "Rain"] # 고정할 배경 영상 폴더 경로(각 폴더 이름만)
+TILE_BG = False # 타일 배경 모드(날씨 배경X)
+FIX_BG = False # 배경 고정 모드(날씨 배경모드 전용)
+BG_PATH = ["spring", "daytime", "Clouds"] # 고정할 배경 영상 폴더 경로(각 폴더 이름만)
 
 # 캐릭터 객체 추가
 PINK_MAN = Player(image_path="img/player_1.png", direction="right",
@@ -821,7 +863,7 @@ NINJA_FROG = Player(image_path="img/player_2.png", direction="right",
 CURR_CHAR = NINJA_FROG
 
 # 맵 객체 추가
-SEOUL = Map(map_data="seoul_integer.txt", name="seoul") # 맵 객체 생성, name=지역이름
+SEOUL = Map(map_data="seoul.txt", name="seoul") # 맵 객체 생성, name=지역이름
 
 # 현재 플레이중인 맵
 CURR_MAP = SEOUL
@@ -844,8 +886,16 @@ while RUN:
     # 플레이어 위치 추적
     CURR_CHAR.calc_dist_from_flag()
 
-    # 그리기
-    CURR_MAP.draw_background() # 배경
+    # <그리기>
+
+    # 배경
+    if TILE_BG:
+        # CURR_MAP.draw_background_tile()
+        CURR_MAP.draw_background_tile_expend()
+    else:
+        # CURR_MAP.draw_background()
+        CURR_MAP.draw_background_expend()
+    
     CURR_MAP.draw_object() # 오브젝트
     CURR_MAP.draw_player() # 플레이어
     CURR_MAP.draw_ui() # UI
