@@ -305,12 +305,11 @@ class Map:
             self.ret, self.frame = self.cap.read() # 다시 읽기 시작
 
     def draw_background_tile(self): # 배경을 타일 이미지로 출력화면 만큼 채워서 그리기 기능
-        arrX = np.arange(0, WINDOW_WIDTH, self.grid_width)
-        arrY = np.arange(0, WINDOW_HEIGHT, self.grid_height)
-        grid_arrX, grid_arrY = np.meshgrid(arrX, arrY, indexing='xy') # indexing='xy': 행렬을 좌표 형식으로 바꿔줌 (y, x) -> (x, y)
-        
-        for x, y in zip(grid_arrX.ravel(), grid_arrY.ravel()): # ravel(): 다차원 배열을 1차원 배열로 평탄화
-            WINDOW.blit(self.background_image, (x, y))
+        for pos in self.coordinate_list:
+            if pos[0] < WINDOW_WIDTH or pos[1] < WINDOW_HEIGHT:
+                WINDOW.blit(self.background_image, pos)
+            else:
+                break
 
     def draw_background_tile_expend(self): # 배경을 타일 이미지로 맵 크기 만큼 채워서 그리기 기능
         for x, y in self.coordinate_list:
@@ -841,7 +840,7 @@ def update_time_and_weather(): # 주기적으로 계절, 시간, 날씨를 분�
         time.sleep(60) # 60초마다 한번씩 분석
 
 # 글로벌 변수
-WINDOW_WIDTH, WINDOW_HEIGHT = 1200, 800 # 출력화면 창의 너비, 높이
+WINDOW_WIDTH, WINDOW_HEIGHT = 1000, 800 # 출력화면 창의 너비, 높이
 WINDOW = pg.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT)) # 출력화면 창 정의
 pg.display.set_caption("Platformer Game") # 창 상단바 제목
 
